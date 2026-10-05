@@ -4,7 +4,7 @@
   "description": "Deterministic technical-SEO audit from your terminal. Crawls a site, measures real issues (metadata, indexing, images, links, schema, performance), prints a scored report and ready-to-apply patches. No AI, no API keys, no telemetry.",
   "type": "module",
   "bin": {
-    "rankforge": "./dist/index.js"
+    "rankforge": "dist/index.js"
   },
   "files": [
     "dist",

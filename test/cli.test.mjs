@@ -213,7 +213,7 @@ test("mcp: stdio server speaks JSON-RPC and runs tools", async () => {
 
 test("package bin resolves the built file", () => {
   const pkg = JSON.parse(readFileSync(join(dirname(CLI), "..", "package.json"), "utf8"));
-  assert.equal(pkg.bin.rankforge, "./dist/index.js");
+  assert.equal(pkg.bin.rankforge, "dist/index.js", "npm normalizes ./ away; keep it canonical");
   const r = spawnSync(process.execPath, [CLI, "--version"], { encoding: "utf8" });
   assert.equal(r.stdout.trim(), pkg.version, "CLI version matches package.json");
 });
