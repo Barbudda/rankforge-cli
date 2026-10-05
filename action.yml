@@ -1,0 +1,56 @@
+name: "RankForge SEO & AI-search audit"
+description: "Deterministic technical-SEO + AI-search (GEO) audit of a URL. Fails the job below a score. No AI, no API keys."
+author: "Barbudda"
+branding:
+  icon: "search"
+  color: "green"
+
+inputs:
+  url:
+    description: "URL to audit (a deployed/preview/staging site — CI runners can't reach your laptop's localhost)."
+    required: true
+  pages:
+    description: "Pages to crawl, breadth-first (1–24)."
+    required: false
+    default: "8"
+  framework:
+    description: "nextjs | nuxt | astro | sveltekit | remix | vite-react | mdx | static"
+    required: false
+    default: "nextjs"
+  fail-under:
+    description: "Fail if the technical-SEO score is below this (0 = never)."
+    required: false
+    default: "0"
+  geo-fail-under:
+    description: "Fail if the AI-search readiness score is below this (0 = skip the GEO gate)."
+    required: false
+    default: "0"
+  report:
+    description: "Write a self-contained HTML report to this path (upload it with actions/upload-artifact)."
+    required: false
+    default: ""
+  version:
+    description: "rankforge-cli version to run."
+    required: false
+    default: "0.2.0"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Technical SEO audit
+      shell: bash
+      run: |
+        REPORT_FLAG=""
+        if [ -n "${{ inputs.report }}" ]; then REPORT_FLAG="--html ${{ inputs.report }}"; fi
+        npx --yes "rankforge-cli@${{ inputs.version }}" audit "${{ inputs.url }}" \
+          --pages "${{ inputs.pages }}" \
+          --framework "${{ inputs.framework }}" \
+          --fail-under "${{ inputs['fail-under'] }}" \
+          $REPORT_FLAG --no-color
+    - name: AI-search readiness (GEO)
+      if: ${{ inputs['geo-fail-under'] != '0' }}
+      shell: bash
+      run: |
+        npx --yes "rankforge-cli@${{ inputs.version }}" geo "${{ inputs.url }}" \
+          --pages "${{ inputs.pages }}" \
+          --fail-under "${{ inputs['geo-fail-under'] }}" --no-color

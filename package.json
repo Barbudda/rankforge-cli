@@ -1,0 +1,55 @@
+{
+  "name": "rankforge-cli",
+  "version": "0.2.0",
+  "description": "Deterministic technical-SEO audit from your terminal. Crawls a site, measures real issues (metadata, indexing, images, links, schema, performance), prints a scored report and ready-to-apply patches. No AI, no API keys, no telemetry.",
+  "type": "module",
+  "bin": {
+    "rankforge": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/cli.test.mjs",
+    "prepublishOnly": "npm test"
+  },
+  "keywords": [
+    "seo",
+    "technical-seo",
+    "audit",
+    "cli",
+    "crawler",
+    "lighthouse",
+    "nextjs",
+    "nuxt",
+    "astro",
+    "sveltekit",
+    "core-web-vitals",
+    "sitemap",
+    "robots",
+    "structured-data",
+    "mcp"
+  ],
+  "author": "Barbudda",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Barbudda/rankforge-cli.git"
+  },
+  "homepage": "https://github.com/Barbudda/rankforge-cli#readme",
+  "bugs": {
+    "url": "https://github.com/Barbudda/rankforge-cli/issues"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  }
+}
