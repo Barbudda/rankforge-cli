@@ -6,6 +6,7 @@
  */
 import { SEO_RULES } from "@/lib/audit/rules";
 import type { SeoRule } from "@/lib/audit/types";
+import { RULE_CATALOG } from "@/lib/audit/catalog";
 import { BILLING_OPEN } from "@/lib/pricing";
 
 /** URL slug for a rule: "meta.title.missing" → "meta-title-missing". */
@@ -105,7 +106,7 @@ export const FAQS = [
   },
   {
     q: "What kinds of SEO issues does Septune find?",
-    a: "54 checks: metadata (titles, descriptions, OpenGraph), indexing (noindex, canonicals, hreflang, soft 404s, robots.txt, sitemaps, HTTPS), page structure, images, structured data against Google's required properties, internal linking, performance and Core Web Vitals, plus 12 AI-search readiness checks.",
+    a: `${RULE_CATALOG.length} checks: metadata (titles, descriptions, OpenGraph), indexing (noindex, canonicals, hreflang, soft 404s, robots.txt, sitemaps, HTTPS), page structure, images, structured data against Google's required properties, internal linking, performance and Core Web Vitals, plus 12 AI-search readiness checks.`,
   },
   {
     q: "How is Septune different from Screaming Frog or Ahrefs?",

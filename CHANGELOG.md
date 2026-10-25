@@ -29,7 +29,7 @@
 **Editors and reports**
 - **Claude Code plugin**: `/plugin marketplace add Barbudda/septune`, then `/plugin install septune@septune`. Adds the MCP tools and the `/septune:seo` and `/septune:check` skills.
 - New MCP tool **`compare_sites`**: production vs local or preview, from your editor. `audit_site` takes `ignoreRobots`, and the local server crawls up to 200 pages.
-- `septune rules` and `list_rules` now list the 54 checks under the same `ruleId`s audits return (the old catalog used different ids). A test keeps the catalog in sync with the engine.
+- `septune rules` and `list_rules` now list the 55 checks under the same `ruleId`s audits return (the old catalog used different ids). A test keeps the catalog in sync with the engine.
 - White-label HTML reports: `--brand`, `--brand-url`, `--brand-color`. A branded report doesn't mention Septune.
 - `septune fix` prints the patch's notes (what to adapt per page) under the diff.
 
