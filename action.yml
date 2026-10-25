@@ -1,5 +1,5 @@
 name: "RankForge SEO & AI-search audit"
-description: "Deterministic technical-SEO + AI-search (GEO) audit of a URL. Fails the job below a score. No AI, no API keys."
+description: "Deterministic technical-SEO + AI-search (GEO) audit. Comments on the pull request and fails it when the preview breaks SEO compared with production. No AI, no API keys."
 author: "Barbudda"
 branding:
   icon: "search"
@@ -7,12 +7,20 @@ branding:
 
 inputs:
   url:
-    description: "URL to audit (a deployed/preview/staging site — CI runners can't reach your laptop's localhost)."
+    description: "URL to audit: a deployed preview or staging site (CI runners can't reach your laptop's localhost)."
     required: true
-  pages:
-    description: "Pages to crawl, breadth-first (1–24)."
+  baseline-url:
+    description: "Production URL to compare against. When set, the job fails if the preview introduces regressions (see fail-on)."
     required: false
-    default: "8"
+    default: ""
+  fail-on:
+    description: "With baseline-url: critical (pages removed from search: noindex, errors, robots.txt) | new (any new issue above low impact) | none."
+    required: false
+    default: "critical"
+  pages:
+    description: "Pages to crawl: linked pages first, then sitemap-only ones (1-500)."
+    required: false
+    default: "25"
   framework:
     description: "nextjs | nuxt | astro | sveltekit | remix | vite-react | mdx | static"
     required: false
@@ -29,28 +37,94 @@ inputs:
     description: "Write a self-contained HTML report to this path (upload it with actions/upload-artifact)."
     required: false
     default: ""
+  comment:
+    description: "On pull requests, post the result as one comment, updated on every push. Needs permissions: pull-requests: write."
+    required: false
+    default: "true"
+  github-token:
+    description: "Token used to comment on the pull request. The job's own token works when the job has pull-requests: write."
+    required: false
+    default: ${{ github.token }}
   version:
     description: "rankforge-cli version to run."
     required: false
-    default: "0.2.0"
+    default: "0.3.0"
 
 runs:
   using: "composite"
   steps:
-    - name: Technical SEO audit
+    # Inputs go through env, never straight into the script: a URL taken
+    # from an event payload can't inject shell commands that way.
+    # Each check records its exit code instead of failing on the spot, so a
+    # failed regression check still produces the audit, the HTML report and
+    # the comment; the last step fails the job.
+    - name: Regression check (preview vs production)
+      id: diff
+      if: ${{ inputs['baseline-url'] != '' }}
       shell: bash
+      env:
+        RF_VERSION: ${{ inputs.version }}
+        RF_URL: ${{ inputs.url }}
+        RF_BASELINE: ${{ inputs['baseline-url'] }}
+        RF_FAIL_ON: ${{ inputs['fail-on'] }}
+        RF_PAGES: ${{ inputs.pages }}
+        RF_FRAMEWORK: ${{ inputs.framework }}
+        RF_MD: ${{ runner.temp }}/rankforge-report.md
       run: |
-        REPORT_FLAG=""
-        if [ -n "${{ inputs.report }}" ]; then REPORT_FLAG="--html ${{ inputs.report }}"; fi
-        npx --yes "rankforge-cli@${{ inputs.version }}" audit "${{ inputs.url }}" \
-          --pages "${{ inputs.pages }}" \
-          --framework "${{ inputs.framework }}" \
-          --fail-under "${{ inputs['fail-under'] }}" \
-          $REPORT_FLAG --no-color
+        status=0
+        npx --yes "rankforge-cli@${RF_VERSION}" diff "$RF_BASELINE" "$RF_URL" \
+          --fail-on "$RF_FAIL_ON" --pages "$RF_PAGES" --framework "$RF_FRAMEWORK" \
+          --markdown "$RF_MD" --no-color || status=$?
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+    - name: Technical SEO audit
+      id: audit
+      shell: bash
+      env:
+        RF_VERSION: ${{ inputs.version }}
+        RF_URL: ${{ inputs.url }}
+        RF_PAGES: ${{ inputs.pages }}
+        RF_FRAMEWORK: ${{ inputs.framework }}
+        RF_FAIL_UNDER: ${{ inputs['fail-under'] }}
+        RF_REPORT: ${{ inputs.report }}
+        RF_MD: ${{ runner.temp }}/rankforge-report.md
+      run: |
+        set -- audit "$RF_URL" --pages "$RF_PAGES" --framework "$RF_FRAMEWORK" --fail-under "$RF_FAIL_UNDER" --markdown "$RF_MD" --no-color
+        if [ -n "$RF_REPORT" ]; then set -- "$@" --html "$RF_REPORT"; fi
+        status=0
+        npx --yes "rankforge-cli@${RF_VERSION}" "$@" || status=$?
+        echo "status=$status" >> "$GITHUB_OUTPUT"
     - name: AI-search readiness (GEO)
+      id: geo
       if: ${{ inputs['geo-fail-under'] != '0' }}
       shell: bash
+      env:
+        RF_VERSION: ${{ inputs.version }}
+        RF_URL: ${{ inputs.url }}
+        RF_PAGES: ${{ inputs.pages }}
+        RF_GEO_FAIL_UNDER: ${{ inputs['geo-fail-under'] }}
       run: |
-        npx --yes "rankforge-cli@${{ inputs.version }}" geo "${{ inputs.url }}" \
-          --pages "${{ inputs.pages }}" \
-          --fail-under "${{ inputs['geo-fail-under'] }}" --no-color
+        status=0
+        npx --yes "rankforge-cli@${RF_VERSION}" geo "$RF_URL" \
+          --pages "$RF_PAGES" --fail-under "$RF_GEO_FAIL_UNDER" --no-color || status=$?
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+    - name: Summary and pull-request comment
+      shell: bash
+      env:
+        RF_MD: ${{ runner.temp }}/rankforge-report.md
+        RF_COMMENT: ${{ inputs.comment }}
+        RF_GITHUB_TOKEN: ${{ inputs['github-token'] }}
+      run: |
+        if [ -s "$RF_MD" ]; then cat "$RF_MD" >> "$GITHUB_STEP_SUMMARY"; fi
+        if [ "$RF_COMMENT" = "true" ]; then node "$GITHUB_ACTION_PATH/pr-comment.mjs" "$RF_MD"; fi
+    - name: Result
+      shell: bash
+      env:
+        RF_DIFF: ${{ steps.diff.outputs.status }}
+        RF_AUDIT: ${{ steps.audit.outputs.status }}
+        RF_GEO: ${{ steps.geo.outputs.status }}
+      run: |
+        failed=0
+        if [ "${RF_DIFF:-0}" != "0" ]; then echo "::error title=RankForge::This change breaks SEO compared with production. The pull-request comment and the job summary list what changed."; failed=1; fi
+        if [ "${RF_AUDIT:-0}" != "0" ]; then echo "::error title=RankForge::The technical-SEO audit failed (score below fail-under, or the site couldn't be reached)."; failed=1; fi
+        if [ "${RF_GEO:-0}" != "0" ]; then echo "::error title=RankForge::AI-search readiness is below geo-fail-under."; failed=1; fi
+        exit "$failed"

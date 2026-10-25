@@ -46,7 +46,7 @@ export type PullRequestStatus =
   | "closed"
   | "simulated";
 
-export type Plan = "starter" | "growth" | "agency" | "enterprise";
+export type Plan = "free" | "pro" | "studio";
 
 // ── User & workspace ────────────────────────────────────────────
 

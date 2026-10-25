@@ -24,7 +24,7 @@ export const AUTONOMY_LEVELS: AutonomyLevel[] = [
     label: "Advisor",
     short: "Advice only",
     description:
-      "Detects issues and explains the fix in plain language. No code, no diffs, no GitHub access — just expert recommendations.",
+      "Detects issues and explains the fix in plain language. Recommendations only: no code, no diffs.",
     writes: false,
     risk: "none",
   },
@@ -34,7 +34,7 @@ export const AUTONOMY_LEVELS: AutonomyLevel[] = [
     label: "Suggest",
     short: "Suggested patches",
     description:
-      "Generates a ready-to-copy diff for every issue, mapped to the exact files. Read-only — never touches GitHub.",
+      "Generates a ready-to-copy diff for every issue, pointed at the files most likely behind it.",
     writes: false,
     risk: "none",
   },
@@ -44,7 +44,7 @@ export const AUTONOMY_LEVELS: AutonomyLevel[] = [
     label: "Draft PRs",
     short: "Draft pull requests",
     description:
-      "Opens draft pull requests on a dedicated branch for you to review and finish. Nothing merges without you.",
+      "Prepares a draft pull request in RankForge for each fix, for you to review and apply. Pushing to GitHub comes with the GitHub App, on the roadmap.",
     writes: true,
     risk: "low",
   },
@@ -54,7 +54,7 @@ export const AUTONOMY_LEVELS: AutonomyLevel[] = [
     label: "Auto · low-risk",
     short: "Auto-ready PRs",
     description:
-      "Automatically opens ready-to-merge PRs for low-risk fixes; higher-risk changes still arrive as drafts to review.",
+      "Prepares ready pull requests for low-risk fixes and drafts for the rest, in RankForge. Pushing to GitHub comes with the GitHub App.",
     writes: true,
     risk: "medium",
   },
@@ -64,7 +64,7 @@ export const AUTONOMY_LEVELS: AutonomyLevel[] = [
     label: "Autopilot",
     short: "Root · full autonomy",
     description:
-      "Maximum autonomy across every category and path — keeps your site continuously optimized at the root. Reserve for repos you fully trust.",
+      "Prepares fixes across every category and path as soon as they're found. Pushing to GitHub comes with the GitHub App.",
     writes: true,
     risk: "high",
   },

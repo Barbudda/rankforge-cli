@@ -2,9 +2,13 @@ import type { EngineIssue } from "@/lib/audit/engine";
 import type { GeoReport } from "@/lib/audit/geo";
 
 /**
- * `--html report.html` — a single self-contained file (no external assets, no
+ * `--html report.html`: a single self-contained file (no external assets, no
  * scripts) you can attach to a PR, email to a client, or open offline. Light
  * and dark aware.
+ *
+ * White-label: `--brand "Studio Name"` (with optional --brand-url and
+ * --brand-color) puts the freelancer's or agency's name on the report and
+ * removes every RankForge mention, so it can go straight to a client.
  */
 
 const esc = (s: string) =>
@@ -22,8 +26,16 @@ export function renderHtmlReport(r: {
   geo: GeoReport;
   fixable: string[];
   version: string;
+  /** White-label: the name the report is prepared by. */
+  brand?: string;
+  brandUrl?: string;
+  /** Accent colour, #rgb / #rrggbb. */
+  brandColor?: string;
 }): string {
   const date = new Date().toISOString().slice(0, 10);
+  const brand = r.brand?.trim().slice(0, 80) || null;
+  const brandUrl = r.brandUrl && /^https?:\/\//i.test(r.brandUrl) ? r.brandUrl : null;
+  const accent = r.brandColor && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(r.brandColor) ? r.brandColor : null;
   const cats = Object.entries(r.scores)
     .map(
       ([k, v]) =>
@@ -34,7 +46,7 @@ export function renderHtmlReport(r: {
     .map((i) => {
       const urls = i.affectedUrls.slice(0, 8).map((u) => `<code>${esc(u.url)}</code>`).join(" ");
       const patch = r.fixable.includes(i.ruleId)
-        ? `<span class="tag patch">patch: rankforge fix ${esc(i.ruleId)}</span>`
+        ? `<span class="tag patch">${r.brand ? "patch available" : `patch: rankforge fix ${esc(i.ruleId)}`}</span>`
         : "";
       return `<li><div class="row"><span class="tag ${i.impact}">${i.impact}</span><strong>${esc(i.title)}</strong><span class="muted">(${i.affectedUrls.length})</span>${patch}</div><p>${esc(i.evidence ?? "")}</p>${urls ? `<p class="urls">${urls}</p>` : ""}</li>`;
     })
@@ -42,7 +54,7 @@ export function renderHtmlReport(r: {
   const geo = r.geo.checks
     .map(
       (c) =>
-        `<li><div class="row"><span class="tag ${c.status === "pass" ? "pass" : c.status === "warn" ? "medium" : "high"}">${c.status}</span><strong>${esc(c.title)}</strong></div><p>${esc(c.detail)}</p>${c.fix ? `<pre>${esc(c.fix)}</pre>` : ""}</li>`,
+        `<li><div class="row"><span class="tag ${c.status === "pass" ? "pass" : c.status === "warn" ? "medium" : "high"}">${c.status}</span><strong>${esc(c.title)}</strong></div><p>${esc(c.detail)}</p>${c.fix && !(r.brand && /rankforge/i.test(c.fix)) ? `<pre>${esc(c.fix)}</pre>` : ""}</li>`,
     )
     .join("");
   const bots = r.geo.bots
@@ -51,7 +63,7 @@ export function renderHtmlReport(r: {
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SEO audit — ${esc(r.url)}</title>
+<title>SEO audit: ${esc(r.url)}${brand ? ` · ${esc(brand)}` : ""}</title>
 <style>
 :root{--bg:#f6f8fc;--card:#fff;--ink:#0e1220;--muted:#5a667e;--line:#e3e8f2;--good:#0f9e76;--ok:#b9760f;--bad:#d1384f;--accent:#3559d6}
 @media (prefers-color-scheme:dark){:root{--bg:#0b0d14;--card:#12141f;--ink:#eaeef7;--muted:#a2adc4;--line:#232a3b;--good:#34e0a1;--ok:#ffb454;--bad:#ff6b81;--accent:#708cff}}
@@ -68,14 +80,21 @@ ul{list-style:none;padding:0;margin:0}li{border-top:1px solid var(--line);paddin
 .tag.critical,.tag.high{color:var(--bad)}.tag.medium{color:var(--ok)}.tag.low{color:var(--muted)}.tag.pass,.tag.patch{color:var(--good)}.urls code{margin-right:6px}
 table{width:100%;border-collapse:collapse;font-size:13px}td{padding:6px 4px;border-top:1px solid var(--line)}
 footer{margin-top:40px;font-size:12px;color:var(--muted)}a{color:var(--accent)}
+.prepared{font-size:13px;color:var(--muted);margin:0 0 6px}
+${accent ? `:root{--accent:${accent}}h1{color:${accent}}` : ""}
 </style></head><body><main>
+${brand ? `<p class="prepared">Prepared by ${brandUrl ? `<a href="${esc(brandUrl)}">${esc(brand)}</a>` : `<strong>${esc(brand)}</strong>`}</p>` : ""}
 <h1>Technical SEO audit</h1>
-<p class="muted">${esc(r.url)} · ${r.pages} pages · ${r.elapsed}s · ${date} · deterministic — every finding is measured</p>
+<p class="muted">${esc(r.url)} · ${r.pages} pages · ${r.elapsed}s · ${date} · every finding is measured on the live site</p>
 <div class="card hero"><div><div class="muted">Overall score</div><div class="big ${tone(r.overall)}">${r.overall}<small>/100</small></div><div class="muted" style="margin-top:6px">AI-search readiness: <b class="${tone(r.geo.score)}">${r.geo.score}/100</b></div></div><div class="cats">${cats}</div></div>
 <h2>Issues (${r.issues.length})</h2><div class="card"><ul>${issues || "<li>No issues detected.</li>"}</ul></div>
-<h2>AI search readiness (GEO) — ${r.geo.score}/100</h2><div class="card"><ul>${geo}</ul></div>
+<h2>AI search readiness (GEO): ${r.geo.score}/100</h2><div class="card"><ul>${geo}</ul></div>
 <h2>AI crawler access (robots.txt)</h2><div class="card"><table>${bots}</table></div>
-<footer>Generated by <a href="https://github.com/Barbudda/rankforge-cli">rankforge-cli</a> v${esc(r.version)}. RankForge measures the technical layer your code controls; it never promises ranking outcomes.</footer>
+<footer>${
+    brand
+      ? `Prepared by ${esc(brand)} on ${date}. Every finding is measured on the live site; no ranking outcome is promised.`
+      : `Made with <a href="https://github.com/Barbudda/rankforge-cli">rankforge-cli</a> v${esc(r.version)}. RankForge measures the technical layer your code controls; it never promises ranking outcomes.`
+  }</footer>
 </main></body></html>
 `;
 }

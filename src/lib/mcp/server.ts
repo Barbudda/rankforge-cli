@@ -7,7 +7,7 @@ import { MCP_TOOLS } from "./tools";
  * exact same tools and protocol behaviour.
  */
 
-export const SERVER_VERSION = "0.2.0";
+export const SERVER_VERSION = "0.3.0";
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SUPPORTED_VERSIONS = new Set(["2024-11-05", "2025-03-26", "2025-06-18"]);

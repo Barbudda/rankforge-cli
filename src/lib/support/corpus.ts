@@ -12,7 +12,7 @@
 import { embed, cosine } from "@/lib/brain/embed";
 import { SEO_RULES } from "@/lib/audit/rules";
 import { AUTONOMY_LEVELS } from "@/lib/agent";
-import { PRICING_TIERS } from "@/lib/pricing";
+import { BILLING_NOTE, PRICING_TIERS, ROADMAP } from "@/lib/pricing";
 import {
   CHANGELOG,
   FAQS,
@@ -45,37 +45,37 @@ function buildChunks(): CorpusChunk[] {
     {
       id: "about",
       title: "What RankForge does",
-      text: "RankForge is a technical-SEO agent for GitHub repositories. It crawls your rendered site like a browser, detects technical SEO issues, maps each one back to the source file that causes it, and opens small, reviewable pull requests that fix it. It never commits to your main branch and never promises Google rankings — it fixes the technical layer your repository controls.",
+      text: "RankForge checks a site's technical SEO at the three moments it breaks: in your editor before you push (the open-source CLI or the Claude Code plugin), on every pull request (a GitHub Action that compares the preview with production, comments the result and fails the check when pages would leave search), and in production (scheduled checks with email, Slack, Discord or webhook alerts). Measurements are deterministic and every finding cites its evidence. RankForge never writes to your repository and never promises Google rankings.",
       url: "/",
     },
     {
       id: "how-it-works",
-      title: "How it works (5 steps)",
-      text: "1) Install the GitHub App — read-only by default, you pick the repos. 2) Add a production or staging URL; RankForge crawls the rendered output. 3) Run an audit — each issue is scored by impact, effort and risk, then prioritized. 4) Review the diffs: every issue links to the files it touches and a ready patch. 5) Merge the pull requests — you stay in control of every merge.",
+      title: "How it works (three checkpoints)",
+      text: "1) Before you push: run npx rankforge-cli audit http://localhost:3000, or install the Claude Code plugin (/plugin marketplace add Barbudda/rankforge-cli, then /plugin install rankforge@rankforge) so your assistant audits and fixes. 2) In the pull request: add the GitHub Action Barbudda/rankforge-cli with your preview URL and baseline-url set to production; it comments the changes on the pull request and fails it on critical regressions. 3) In production: sign up, add your site and turn on monitoring. 4) Fix from the evidence: every finding lists the affected URLs and likely files, and mechanical ones have a ready patch (rankforge fix <ruleId>).",
       url: "/#how-it-works",
     },
     {
       id: "security",
       title: "Security model",
-      text: "Read-only by default. Write access is optional and scoped to RankForge's own branches — it can never touch protected branches. Never a direct commit or merge to main: every change arrives as a pull request a human reviews. RankForge reads your source and rendered HTML, never your environment secrets. Every action is logged and you can disable the agent at any time. Enterprise adds self-hosting and SSO/SAML.",
+      text: "RankForge only reads rendered pages, like any crawler, and honours robots.txt. It never writes to your repository: fixes reach your code through your own pull requests. The CLI and the editor agent run on your machine and send nothing to RankForge; the GitHub Action uses the job's token only to comment on the pull request; hosted monitoring fetches your public pages. It never reads your source code or environment secrets, and every monitoring check is kept with what changed.",
       url: "/#security",
     },
     {
       id: "contact",
       title: "Contact & account deletion",
-      text: `RankForge support is self-serve through this assistant. For anything it can't answer — account deletion, GDPR requests (access, rectification, erasure), billing questions or enterprise/self-host discussions — email ${CONTACT} from your account address.`,
+      text: `RankForge support is self-serve through this assistant. For anything it can't answer, such as account deletion, GDPR requests (access, rectification, erasure), billing questions or enterprise/self-host discussions, email ${CONTACT} from your account address.`,
       url: "/privacy",
     },
     {
       id: "privacy",
       title: "Privacy (what is stored)",
-      text: "RankForge stores: your email and a password hash (via Supabase Auth — the plain password is never seen), and for each connected repository its name, the production URL you provide, plus the audits, issues and pull-request metadata generated for it. No ad trackers, no data resale. Data lives in Postgres with row-level security so each account only reads its own rows. Deletion on request by email.",
+      text: "RankForge stores: your email and a password hash (via Supabase Auth; the plain password is never seen); for each site, its name, the production URL you provide and the audits and issues generated for it; and with monitoring on, the alert address, the webhook URL and a record of each check, kept 3, 12 or 24 months depending on the plan. Processors: Supabase (database, sign-in), Vercel (hosting), Resend (alert emails), Anthropic (optional analysis), Google (the site URL, only when Core Web Vitals are on). No ad trackers, no data resale. Row-level security means each account only reads its own rows. Deletion on request by email.",
       url: "/privacy",
     },
     {
       id: "terms",
       title: "Terms (short version)",
-      text: "Use RankForge on sites and repositories you are authorized to audit. Fixes only ever arrive as pull requests on RankForge's own branches; merging is always your decision. The product is an MVP: pricing shown is a placeholder, features may change, and you remain responsible for reviewing every PR before merging. No search-ranking outcomes are promised.",
+      text: "Use RankForge on sites you are authorized to audit. It reads public pages and never writes to your repositories; any change to your code is yours to make and merge. The product is in beta: billing isn't open, features may change, monitoring alerts are best effort, and you remain responsible for reviewing every change. No search-ranking outcomes are promised.",
       url: "/terms",
     },
   );
@@ -85,9 +85,9 @@ function buildChunks(): CorpusChunk[] {
     id: "autonomy",
     title: "Modification levels",
     text:
-      "RankForge's autonomy is a 5-step ladder you set per repository (it overrides the workspace default): " +
-      AUTONOMY_LEVELS.map((l) => `${l.step}. ${l.label} — ${l.description}`).join(" ") +
-      " Even at Autopilot, changes still arrive as pull requests you review — RankForge never force-pushes to your default branch.",
+      "In the hosted app, each repository has a modification level that sets how far RankForge prepares a fix: " +
+      AUTONOMY_LEVELS.map((l) => `${l.step}. ${l.label}: ${l.description}`).join(" ") +
+      " Prepared pull requests stay in RankForge for review: nothing is pushed to GitHub yet. To apply a fix today, use the patch or your AI editor.",
     url: "/#security",
   });
 
@@ -98,8 +98,8 @@ function buildChunks(): CorpusChunk[] {
       title: rule.title,
       text: `${rule.title} (category: ${rule.category}). ${rule.description} Default impact: ${rule.defaultImpact}, effort: ${rule.defaultEffort}, risk: ${rule.defaultRisk}. ${
         rule.canAutoFix
-          ? "RankForge can fix this automatically: it opens a small, reviewable pull request with the patch, its expected impact and a validation checklist."
-          : "This class of issue is reported with affected pages and concrete guidance — it needs a human decision rather than an automatic patch."
+          ? "RankForge prepares a patch for this class of issue, with what to adapt and how to verify it; you or your AI editor apply it."
+          : "This class of issue is reported with affected pages and concrete guidance. It needs a human decision rather than an automatic patch."
       }${rule.frameworks?.length ? ` Tailored fixes exist for: ${rule.frameworks.join(", ")}.` : ""}`,
       url: `/docs/issues/${ruleSlug(rule.id)}`,
     });
@@ -118,19 +118,23 @@ function buildChunks(): CorpusChunk[] {
     chunks.push({
       id: `tier:${t.id}`,
       title: `${t.name} plan`,
-      text: `${t.name} plan — ${t.tagline} Price: ${
-        t.priceMonthly === null ? "custom (contact us)" : `€${t.priceMonthly}/month`
-      }. Limits: ${t.limits.repos}, ${t.limits.audits}, ${t.limits.prs}. Includes: ${t.features.join(", ")}. Note: prices are placeholders while RankForge is an MVP; the first audit is free on every plan, no credit card required.`,
+      text: `${t.name} plan. ${t.tagline} Price: €${t.priceMonthly}/month. Monitoring: ${t.limits.sites} site${t.limits.sites > 1 ? "s" : ""}, checked ${t.limits.frequency}, up to ${t.limits.pages} pages per check, ${t.limits.webhooks ? "email, Slack, Discord or webhook alerts" : "email alerts"}, ${t.limits.historyMonths} months of history. Includes: ${t.features.join("; ")}. ${BILLING_NOTE}`,
       url: "/pricing",
     });
   }
+  chunks.push({
+    id: "tier:roadmap",
+    title: "What's not available yet",
+    text: `Planned, not built yet: ${ROADMAP.join("; ")}. RankForge doesn't offer SSO, self-hosting or team seats today.`,
+    url: "/pricing",
+  });
 
   // ── Framework guides ───────────────────────────────────────────
   for (const fw of FRAMEWORK_PAGES) {
     chunks.push({
       id: `fw:${fw.slug}`,
       title: `Technical SEO for ${fw.name}`,
-      text: `${fw.name} support: ${fw.blurb} Metadata is handled through ${fw.metaApi}. RankForge maps rendered issues back to the exact file and opens pull requests with framework-idiomatic fixes.`,
+      text: `${fw.name} support: ${fw.blurb} Metadata is handled through ${fw.metaApi}. Mechanical fixes come as ready patches written for ${fw.name}.`,
       url: `/frameworks/${fw.slug}`,
     });
   }
@@ -140,8 +144,8 @@ function buildChunks(): CorpusChunk[] {
     id: "changelog",
     title: "What's new (changelog)",
     text:
-      "What's new in RankForge — the latest release notes, recent updates and shipped features, newest first: " +
-      CHANGELOG.map((e) => `${e.date} — ${e.title}: ${e.notes.join(" ")}`).join(" | "),
+      "What's new in RankForge: the latest release notes, recent updates and shipped features, newest first. " +
+      CHANGELOG.map((e) => `${e.date}, ${e.title}: ${e.notes.join(" ")}`).join(" | "),
     url: "/changelog",
   });
 

@@ -31,28 +31,28 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     slug: "nextjs",
     name: "Next.js",
     blurb:
-      "App Router metadata, generateMetadata on dynamic routes, sitemap.ts and robots.ts conventions — RankForge maps rendered issues back to the exact route file.",
+      "App Router metadata, generateMetadata on dynamic routes, sitemap.ts and robots.ts conventions. RankForge points each rendered issue at the route file most likely behind it.",
     metaApi: "generateMetadata / metadata export",
   },
   {
     slug: "nuxt",
     name: "Nuxt",
     blurb:
-      "useSeoMeta and useHead usage, server-rendered meta parity, and Nitro-generated sitemaps — issues map back to pages and composables.",
+      "useSeoMeta and useHead usage, server-rendered meta parity, and Nitro-generated sitemaps, with each issue pointed at the page or composable most likely behind it.",
     metaApi: "useSeoMeta / useHead",
   },
   {
     slug: "astro",
     name: "Astro",
     blurb:
-      "Frontmatter-driven meta, content-collection pages and Astro's static output — issues map back to .astro layouts and collections.",
+      "Frontmatter-driven meta, content-collection pages and Astro's static output. Each issue points at the .astro layout or collection most likely behind it.",
     metaApi: "frontmatter + <head> in layouts",
   },
   {
     slug: "sveltekit",
     name: "SvelteKit",
     blurb:
-      "svelte:head management, +page load metadata and prerendered routes — issues map back to +page.svelte and layout files.",
+      "svelte:head management, +page load metadata and prerendered routes; each issue points at the +page.svelte or layout file most likely behind it.",
     metaApi: "<svelte:head> / load data",
   },
 ];
@@ -75,52 +75,60 @@ export function rulesForFramework(slug: string): SeoRule[] {
  */
 export const FAQS = [
   {
+    q: "What does RankForge actually do?",
+    a: "It checks your site's technical SEO at the three moments it breaks: in your editor before you push (the CLI or the Claude Code plugin), on every pull request (a GitHub Action that compares the preview with production and comments the result), and in production (scheduled checks with alerts). The measurements are deterministic: no AI guesses, and every finding cites its evidence.",
+  },
+  {
     q: "Does RankForge replace SEO experts?",
-    a: "No. It removes the manual, mechanical part. Experts still set strategy and review the PRs; RankForge just turns those decisions into code in minutes instead of sprints.",
+    a: "No. It catches the technical breakage that slips through code review: noindex, canonicals, robots.txt, sitemaps, structured data. Strategy, content and links stay with people.",
   },
   {
     q: "Which frameworks are supported?",
-    a: "Next.js, Nuxt, Astro, SvelteKit, Remix, Vite + React, MDX and static sites. Next.js, Nuxt, Astro and MDX have the deepest framework-aware fixes today.",
+    a: "Any site that serves HTML can be audited. Ready patches are written for Next.js, Nuxt, Astro, SvelteKit, Remix, Vite + React, MDX and static sites, with the deepest support for Next.js.",
   },
   {
-    q: "Can it modify my main branch?",
-    a: "Never directly. RankForge only ever pushes to its own branches and opens pull requests. Nothing reaches main without a human merge.",
+    q: "Can RankForge change my code or my main branch?",
+    a: "No. RankForge never writes to your repository. It reads your rendered pages; fixes reach your code through your own pull requests, written by you or your AI editor.",
   },
   {
-    q: "Does it need write access?",
-    a: "It is read-only by default. Write access is optional and scoped to RankForge's own branches. It can't touch protected branches or your secrets.",
+    q: "Does it need access to my repository?",
+    a: "No. The CLI and the editor agent run on your machine, the GitHub Action runs in your own CI and uses the job's token only to comment on the pull request, and the hosted monitoring only fetches your public pages.",
   },
   {
-    q: "Can I review every change?",
-    a: "Yes. Every fix is a small, reviewable diff that comes with an explanation, the expected impact, and steps to validate it. You stay in control of every merge.",
+    q: "How does the pull-request check work?",
+    a: "Add the GitHub Action with your preview URL and your production URL. On every push it audits both, matches pages by path and comments the changes on the pull request. It fails the check when pages would leave search: a new noindex, pages that start failing, robots.txt blocking Google. Differences that only come from the preview environment, like its noindex header, are listed apart and never fail it.",
   },
   {
-    q: "What kinds of SEO issues does RankForge fix?",
-    a: "Metadata (titles, descriptions, OpenGraph), indexing (canonicals, sitemaps, robots), page structure, image alt text, structured data and schema, internal linking, performance signals, and framework-specific fixes like generateMetadata usage.",
+    q: "What does monitoring watch?",
+    a: "noindex, robots.txt, canonicals, pages that start failing or redirecting, the sitemap, the HTTPS certificate and the Core Web Vitals of real users. Each check is compared with the previous one, and you're alerted by email, Slack, Discord or webhook when something critical changes.",
+  },
+  {
+    q: "What kinds of SEO issues does RankForge find?",
+    a: "54 checks: metadata (titles, descriptions, OpenGraph), indexing (noindex, canonicals, hreflang, soft 404s, robots.txt, sitemaps, HTTPS), page structure, images, structured data against Google's required properties, internal linking, performance and Core Web Vitals, plus 12 AI-search readiness checks.",
   },
   {
     q: "How is RankForge different from Screaming Frog or Ahrefs?",
-    a: "Crawlers and audit suites report issues. RankForge maps each issue to the source file in your repository and opens the pull request that fixes it, so the finding and the fix arrive together.",
+    a: "Crawlers and SEO suites audit what is already live. RankForge runs its checks before a change ships, on localhost and on the preview of every pull request compared with production, then keeps watching production. It doesn't do backlinks, rankings or keyword data, which need a search index RankForge doesn't have.",
   },
   {
     q: "Does it work with GitLab or Bitbucket?",
-    a: "GitHub only today, via the RankForge GitHub App. Repositories on other hosts can still be crawled and audited, but PR creation requires GitHub.",
+    a: "The CLI works in any CI: npx rankforge-cli diff <production> <preview> exits 1 on a critical regression and can write a Markdown summary. The pull-request comment is built for GitHub today.",
   },
   {
     q: "Will this improve my Google rankings?",
-    a: "No tool can honestly promise rankings, and RankForge doesn't. It fixes the technical layer so your pages can be crawled, rendered, and indexed correctly, which is the part of SEO a repository controls.",
+    a: "No tool can honestly promise rankings, and RankForge doesn't. It keeps the technical layer working so your pages can be crawled, rendered and indexed correctly, which is the part of SEO your code controls.",
   },
   {
     q: "Does it support agencies?",
-    a: "The Agency plan adds multi-tenant client workspaces, per-client reporting and role-based access so you can manage many sites from one dashboard.",
+    a: "Yes, on the Studio plan: 25 monitored sites, an alert address and webhook per client, and white-label HTML reports with your name and colour. Scheduled client reports are on the roadmap.",
   },
   {
     q: "Does it work with monorepos?",
-    a: "Yes. You can point RankForge at the app within a monorepo, and it scopes its file mapping and PRs to the right package.",
+    a: "Yes. RankForge audits URLs, not repositories: point it at the app's preview and production URLs wherever its code lives.",
   },
   {
-    q: "What happens if a fix is risky?",
-    a: "Every issue carries a risk score. Low-risk fixes arrive as ready-to-review PRs; higher-risk ones are opened as draft PRs or kept as suggestions. Either way, nothing merges without your approval.",
+    q: "Are the patches safe to apply?",
+    a: "Mechanical patches (robots.txt, sitemap, canonical, viewport, lang, JSON-LD, OpenGraph) are written for your framework and come with notes on what to adapt. Apply them on a branch and let the pull-request check confirm the issue cleared and nothing else broke.",
   },
   {
     q: "Can I try RankForge without an account?",
@@ -128,31 +136,31 @@ export const FAQS = [
   },
   {
     q: "Can I use RankForge from my editor?",
-    a: "Yes. RankForge ships as an MCP server: connect it to Claude Code, Cursor, VS Code or any MCP-capable assistant and your coding agent can run the full deterministic audit against localhost or production, pull fix templates, and patch the repository it already has open. See the guide at /docs/agent.",
+    a: "Yes. Install the Claude Code plugin, or connect the MCP server to Cursor, VS Code or any MCP-capable assistant. Your coding agent audits localhost or production, pulls fix templates, patches the repository it already has open, and compares the result with production. See the guide at /docs/agent.",
   },
 ];
 
 /** Pricing-specific FAQ — rendered and marked up on /pricing only. */
 export const PRICING_FAQS = [
   {
-    q: "Is there a free tier?",
-    a: "Your first audit is free on every plan and no credit card is required to run it. Paid plans start when RankForge begins opening pull requests for you on a schedule.",
+    q: "What do I pay for, exactly?",
+    a: "For RankForge watching your production sites on its own: a check every day, and an alert the moment a deploy makes a page noindex, blocks Google in robots.txt, breaks a canonical, takes a page down or lets the HTTPS certificate expire. Audits from the CLI and your editor are free and unlimited.",
   },
   {
-    q: "What counts toward the monthly PR limit?",
-    a: "Only pull requests RankForge actually opens. Audits, issue detection and fix previews are unlimited on every paid plan.",
+    q: "Is there a free plan?",
+    a: "Yes, and it isn't a trial: the CLI, the editor agent, the CI regression gate and white-label reports are free for good, plus monitoring of one site every week.",
   },
   {
-    q: "What happens when I hit the crawl page limit?",
-    a: "The audit completes on the pages already crawled and tells you what was skipped. Upgrade or narrow the crawl scope to cover larger sites.",
+    q: "What happens when a site has more pages than my plan crawls?",
+    a: "The check covers the pages it can reach within the limit, linked pages first, and says the crawl stopped at the limit so a result is never presented as complete when it isn't.",
   },
   {
     q: "Can I cancel anytime?",
-    a: "Yes. Plans are monthly with no lock-in. Your connected repos and audit history stay readable after downgrade.",
+    a: "Yes. Plans will be monthly with no lock-in. After a downgrade, your check history stays readable within the new plan's window (3 months on Free).",
   },
   {
-    q: "Are these prices final?",
-    a: "Prices are placeholders while RankForge is an MVP, as noted below the tiers. Early users will be grandfathered on their plan when pricing is finalized.",
+    q: "Is billing open?",
+    a: "Not yet. During the beta, Pro is free on every account. The prices on this page are what the plans will cost when billing opens, and you'll be told before anything changes.",
   },
 ];
 
@@ -161,10 +169,22 @@ export type ChangelogEntry = { date: string; title: string; notes: string[] };
 /** Newest first. Dates also drive sitemap lastModified for content routes. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-25",
+    title: "Monitoring, regression gates and a crawler that reads sites like Google",
+    notes: [
+      "Monitoring: RankForge checks your production site on a schedule and alerts you by email, Slack, Discord or webhook when a page starts failing, turns noindex, gets blocked by robots.txt, or when the sitemap or the HTTPS certificate breaks.",
+      "rankforge diff and watch compare two versions of a site, page by page, and exit 1 on critical changes. The GitHub Action takes a baseline-url to gate pull requests: preview against production.",
+      "Crawler: sitemap-seeded, up to 500 pages, robots.txt read the way Googlebot reads it, X-Robots-Tag headers, hreflang, canonical targets, soft 404s, sitemap hygiene and certificate checks.",
+      "Core Web Vitals of real users from Google's Chrome UX Report, and 21 AI crawlers checked for AI-search access.",
+      "A Claude Code plugin with the MCP tools and two skills, and a compare_sites tool for your editor.",
+      "The GitHub Action comments the result on the pull request, in one comment updated on every push.",
+    ],
+  },
+  {
     date: "2026-09-21",
     title: "Open-source CLI + free audit page",
     notes: [
-      "npx rankforge-cli audit <url> — the deterministic engine as a zero-dependency terminal CLI, MIT licensed, with a GitHub Action for CI gates (--fail-under).",
+      "npx rankforge-cli audit <url>: the deterministic engine as a zero-dependency terminal CLI, MIT licensed, with a GitHub Action for CI gates (--fail-under).",
       "A free, no-signup audit at /audit: 3 pages, every issue measured with evidence, nothing stored.",
       "Engine: crawled pages are deduplicated by final URL so a redirect target is never reported twice.",
     ],
@@ -173,9 +193,9 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-07-06",
     title: "The RankForge agent in your editor (MCP)",
     notes: [
-      "RankForge now ships as an MCP server at /api/mcp — connect it to Claude Code, Cursor, VS Code or any MCP client.",
+      "RankForge now ships as an MCP server at /api/mcp. Connect it to Claude Code, Cursor, VS Code or any MCP client.",
       "Your coding assistant runs the deterministic audit against localhost or production, gets fix templates, and patches the repo it already has open.",
-      "Deterministic audit engine: measured image weights, real link statuses, internal link graph, content analysis — no LLM required.",
+      "Deterministic audit engine: measured image weights, real link statuses, internal link graph and content analysis, with no LLM required.",
     ],
   },
   {

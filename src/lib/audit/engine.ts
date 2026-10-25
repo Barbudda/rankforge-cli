@@ -11,12 +11,40 @@ import { buildLinkGraph, normalizePath } from "./link-graph";
 import { analyzeContent, type ContentAnalysis } from "./content";
 import { analyzeContentIntel } from "./content-intel";
 import type { ResourceReport } from "./resource-probe";
+import type { TlsInfo } from "@/lib/net/tls";
+import { formatVital, type VitalsReport } from "./vitals";
+import { isMetaNoindex, isNoindex, noindexSource } from "./robots-directives";
+import { runIndexingChecks } from "./indexing-checks";
 
-/** Presence of the well-known SEO files, probed by the crawler. */
+/** Site-level facts probed directly by the crawler (real fetches, no inference). */
 export interface SiteFilesInput {
   hasSitemap: boolean;
   hasRobots: boolean;
   robotsDeclaresSitemap: boolean;
+  /** robots.txt body ("" when absent). */
+  robotsTxt?: string;
+  /** HTTP status of /robots.txt. */
+  robotsStatus?: number;
+  /** robots.txt answered with an HTML page. */
+  robotsIsHtml?: boolean;
+  /** Page URLs listed in the sitemap(s). */
+  sitemapUrls?: string[];
+  /** The sitemap files that were read (robots.txt can point to another host). */
+  sitemapFiles?: string[];
+  /** The sitemap scan hit a cap, so "missing from sitemap" can't be judged. */
+  sitemapTruncated?: boolean;
+  /** HTTP status returned for a path that cannot exist (soft-404 probe). */
+  notFoundStatus?: number;
+  /** The probe path used for notFoundStatus. */
+  notFoundProbe?: string;
+  /** Where the probe landed when the site redirected it (e.g. to the homepage). */
+  notFoundLandedOn?: string;
+  /** HTTPS certificate of the site's host. */
+  tls?: TlsInfo | null;
+  /** The crawl drained every linked page (no page cap or deadline cut). */
+  crawlComplete?: boolean;
+  /** Core Web Vitals field data (CrUX), when the caller fetched it. */
+  vitals?: VitalsReport | null;
 }
 
 /**
@@ -98,19 +126,22 @@ const ALL_CATEGORIES: SeoCategory[] = [
   "framework",
 ];
 
-/** Required properties per common schema.org type (Google rich-results). */
-const SCHEMA_REQUIRED: Record<string, string[]> = {
-  Article: ["headline"],
-  BlogPosting: ["headline"],
-  NewsArticle: ["headline"],
-  Product: ["name"],
+/**
+ * Properties Google requires for a rich result, per type (search gallery,
+ * checked 2026-10-25). An inner array means "at least one of". Types with no
+ * required property (Article, Organization) and retired features (FAQ rich
+ * results ended 2026-05-07, HowTo in 2023) are left out on purpose: flagging
+ * them would send people after a result that no longer exists.
+ */
+const SCHEMA_REQUIRED: Record<string, (string | string[])[]> = {
+  Product: ["name", ["offers", "review", "aggregateRating"]],
   BreadcrumbList: ["itemListElement"],
-  FAQPage: ["mainEntity"],
-  Organization: ["name"],
-  Event: ["name", "startDate"],
-  Recipe: ["name"],
-  Question: ["name", "acceptedAnswer"],
-  JobPosting: ["title", "datePosted"],
+  Event: ["name", "startDate", "location"],
+  LocalBusiness: ["name", "address"],
+  Recipe: ["name", "image"],
+  VideoObject: ["name", "thumbnailUrl", "uploadDate"],
+  JobPosting: ["title", "datePosted", "description", "hiringOrganization"],
+  Review: ["author", "reviewRating"],
 };
 
 /** Validate JSON-LD nodes on a page against required properties. */
@@ -134,7 +165,10 @@ function validateJsonLd(page: CrawledPage): string[] {
     for (const type of types) {
       const required = SCHEMA_REQUIRED[type];
       if (!required) continue;
-      const missing = required.filter((prop) => o[prop] === undefined || o[prop] === null || o[prop] === "");
+      const absent = (prop: string) => o[prop] === undefined || o[prop] === null || o[prop] === "";
+      const missing = required
+        .filter((req) => (Array.isArray(req) ? req.every(absent) : absent(req)))
+        .map((req) => (Array.isArray(req) ? `one of ${req.join("/")}` : req));
       if (missing.length) problems.push(`${type} missing ${missing.join(", ")}`);
     }
   };
@@ -163,6 +197,24 @@ function jsonLdTypes(page: CrawledPage): Set<string> {
 }
 
 /**
+ * Path segments of pages that sites keep out of search on purpose: sign-in,
+ * account, cart, checkout, confirmation, internal search.
+ */
+const UTILITY_SEGMENTS = new Set([
+  "login", "log-in", "signin", "sign-in", "signup", "sign-up", "register",
+  "logout", "log-out", "signout", "sign-out", "account", "my-account", "profile",
+  "settings", "dashboard", "admin", "auth", "oauth", "callback", "password",
+  "forgot-password", "reset-password", "verify", "cart", "basket", "checkout",
+  "thank-you", "thanks", "confirmation", "search", "unsubscribe", "preview",
+]);
+
+function isUtilityPath(path: string): boolean {
+  return path
+    .split("/")
+    .some((seg) => UTILITY_SEGMENTS.has(seg.toLowerCase().replace(/\.(html?|php)$/, "")));
+}
+
+/**
  * Run the full deterministic audit over a crawled site.
  */
 export function runDeterministicAudit(
@@ -178,6 +230,11 @@ export function runDeterministicAudit(
   // HTML 200 pages only feed most content checks; fetch errors are their own.
   const ok = pages.filter((p) => p.statusCode >= 200 && p.statusCode < 300);
   const errored = pages.filter((p) => p.statusCode >= 400);
+  // Pages meant to be indexed. Content and metadata quality only matter there:
+  // a login page with a noindex meta tag, no canonical and 40 words isn't a
+  // defect. Only the meta tag counts here, because preview deployments send
+  // X-Robots-Tag: noindex on every page and their audits must still compare.
+  const indexable = ok.filter((p) => !isMetaNoindex(p));
 
   const push = (i: EngineIssue) => {
     if (i.affectedUrls.length > 0) issues.push(i);
@@ -185,7 +242,7 @@ export function runDeterministicAudit(
   const norm = (u: string) => normalizePath(u, startUrl) ?? u;
 
   // ══ METADATA ══════════════════════════════════════════════════════
-  const noTitle = ok.filter((p) => !p.title || p.title.trim().length === 0);
+  const noTitle = indexable.filter((p) => !p.title || p.title.trim().length === 0);
   push({
     ruleId: "meta-title-missing",
     category: "metadata",
@@ -196,14 +253,14 @@ export function runDeterministicAudit(
     effort: "low",
     risk: "low",
     confidence: 100,
-    evidence: `${noTitle.length} of ${ok.length} crawled pages have no <title>.`,
+    evidence: `${noTitle.length} of ${indexable.length} indexable pages have no <title>.`,
     affectedUrls: noTitle.map((p) => ({ url: norm(p.url) })),
     files: [{ path: fileHint(fw, "layout"), reason: "Where the document <title> is set (or generateMetadata).", confidence: 60 }],
     canAutoFix: true,
   });
 
-  const shortTitle = ok.filter((p) => p.title && p.title.trim().length > 0 && p.title.trim().length < 15);
-  const longTitle = ok.filter((p) => p.title && p.title.trim().length > 65);
+  const shortTitle = indexable.filter((p) => p.title && p.title.trim().length > 0 && p.title.trim().length < 15);
+  const longTitle = indexable.filter((p) => p.title && p.title.trim().length > 65);
   push({
     ruleId: "meta-title-length",
     category: "metadata",
@@ -226,7 +283,7 @@ export function runDeterministicAudit(
   // Duplicate titles across pages. Guard trimmed-non-empty so whitespace-only
   // titles aren't reported as BOTH "missing" and "duplicate".
   const titleGroups = groupBy(
-    ok.filter((p) => p.title && p.title.trim().length > 0),
+    indexable.filter((p) => p.title && p.title.trim().length > 0),
     (p) => p.title!.trim().toLowerCase(),
   );
   const dupTitlePages = Object.values(titleGroups).filter((g) => g.length > 1).flat();
@@ -246,7 +303,7 @@ export function runDeterministicAudit(
     canAutoFix: false,
   });
 
-  const noDesc = ok.filter((p) => !p.metaDescription || p.metaDescription.trim().length === 0);
+  const noDesc = indexable.filter((p) => !p.metaDescription || p.metaDescription.trim().length === 0);
   push({
     ruleId: "meta-description-missing",
     category: "metadata",
@@ -257,14 +314,14 @@ export function runDeterministicAudit(
     effort: "low",
     risk: "low",
     confidence: 100,
-    evidence: `${noDesc.length} of ${ok.length} pages have no meta description.`,
+    evidence: `${noDesc.length} of ${indexable.length} indexable pages have no meta description.`,
     affectedUrls: noDesc.map((p) => ({ url: norm(p.url) })),
     files: [{ path: fileHint(fw, "layout"), reason: "Default + per-page description source.", confidence: 55 }],
     canAutoFix: true,
   });
 
   const dupDescGroups = groupBy(
-    ok.filter((p) => p.metaDescription && p.metaDescription.trim().length > 0),
+    indexable.filter((p) => p.metaDescription && p.metaDescription.trim().length > 0),
     (p) => p.metaDescription!.trim().toLowerCase(),
   );
   const dupDescPages = Object.values(dupDescGroups).filter((g) => g.length > 1).flat();
@@ -303,24 +360,66 @@ export function runDeterministicAudit(
   });
 
   // ══ INDEXING ══════════════════════════════════════════════════════
-  const accidentalNoindex = ok.filter((p) => p.metaRobots?.includes("noindex"));
+  // Both channels Google reads: the robots meta tag and the X-Robots-Tag header.
+  // A noindex is alarming on a page people should find. Sign-in, account and
+  // checkout pages carry one on purpose, so unless the sitemap asks for them
+  // to be indexed (a contradiction) or it's the start page, they're a notice.
+  const hostPath = (u: string) => {
+    try {
+      const x = new URL(u, startUrl);
+      return `${x.host.toLowerCase()}${x.pathname.replace(/\/+$/, "") || "/"}`;
+    } catch {
+      return null;
+    }
+  };
+  const sitemapKeys = new Set((siteFiles?.sitemapUrls ?? []).map(hostPath).filter((k): k is string => k !== null));
+  const inSitemap = (p: CrawledPage) => p.discoveredVia === "sitemap" || sitemapKeys.has(hostPath(p.url) ?? "");
+  const startPath = normalizePath(startUrl, startUrl) ?? "/";
+  const noindexed = ok.filter((p) => isNoindex(p));
+  const deliberate = (p: CrawledPage) => !inSitemap(p) && norm(p.url) !== startPath && isUtilityPath(norm(p.url));
+  const harmfulNoindex = noindexed.filter((p) => !deliberate(p));
+  const utilityNoindex = noindexed.filter(deliberate);
   push({
     ruleId: "indexing-noindex",
     category: "indexing",
     title: "Pages set to noindex",
     description:
-      "These pages tell search engines not to index them. If that's unintended, they're invisible in search. Confirm each noindex is deliberate.",
+      "These pages tell search engines not to index them, so they can't appear in search. Confirm each noindex is deliberate.",
     impact: "critical",
     effort: "low",
     risk: "medium",
     confidence: 100,
-    evidence: `${accidentalNoindex.length} pages carry a robots noindex directive.`,
-    affectedUrls: accidentalNoindex.map((p) => ({ url: norm(p.url), note: p.metaRobots ?? "" })),
+    evidence: `${harmfulNoindex.length} pages carry a noindex directive (robots meta tag or X-Robots-Tag header).`,
+    affectedUrls: harmfulNoindex.map((p) => ({
+      url: norm(p.url),
+      note: [
+        noindexSource(p),
+        inSitemap(p) ? "listed in the sitemap" : null,
+        norm(p.url) === startPath ? "the start page" : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    })),
     files: [{ path: fileHint(fw, "page"), reason: "Where the robots meta / metadata.robots is emitted.", confidence: 50 }],
     canAutoFix: false,
   });
+  push({
+    ruleId: "indexing-noindex-utility",
+    category: "indexing",
+    title: "Utility pages kept out of search (noindex)",
+    description:
+      "Sign-in, account, cart and similar pages carry noindex. That's usually deliberate; check that none of them should appear in search.",
+    impact: "low",
+    effort: "low",
+    risk: "low",
+    confidence: 60,
+    evidence: `${utilityNoindex.length} utility pages carry noindex, and none of them is in the sitemap.`,
+    affectedUrls: utilityNoindex.map((p) => ({ url: norm(p.url), note: noindexSource(p) })),
+    files: [],
+    canAutoFix: false,
+  });
 
-  const noCanonical = ok.filter((p) => !p.canonical);
+  const noCanonical = indexable.filter((p) => !p.canonical);
   push({
     ruleId: "indexing-canonical-missing",
     category: "indexing",
@@ -331,7 +430,7 @@ export function runDeterministicAudit(
     effort: "low",
     risk: "low",
     confidence: 95,
-    evidence: `${noCanonical.length} of ${ok.length} pages declare no canonical.`,
+    evidence: `${noCanonical.length} of ${indexable.length} indexable pages declare no canonical.`,
     affectedUrls: noCanonical.map((p) => ({ url: norm(p.url) })),
     files: [{ path: fileHint(fw, "layout"), reason: "alternates.canonical / <link rel=canonical> source.", confidence: 55 }],
     canAutoFix: true,
@@ -403,8 +502,8 @@ export function runDeterministicAudit(
   });
 
   // ══ STRUCTURE ═════════════════════════════════════════════════════
-  const noH1 = ok.filter((p) => p.h1s.length === 0);
-  const multiH1 = ok.filter((p) => p.h1s.length > 1);
+  const noH1 = indexable.filter((p) => p.h1s.length === 0);
+  const multiH1 = indexable.filter((p) => p.h1s.length > 1);
   push({
     ruleId: "structure-h1-missing",
     category: "structure",
@@ -437,7 +536,7 @@ export function runDeterministicAudit(
   });
 
   // Heading hierarchy skips (e.g. h1 → h3 with no h2).
-  const skips = ok.filter((p) => {
+  const skips = indexable.filter((p) => {
     let prev = 0;
     for (const h of p.headings) {
       if (prev && h.level > prev + 1) return true;
@@ -462,7 +561,7 @@ export function runDeterministicAudit(
   });
 
   // ── Content intelligence (TF-IDF topic, alignment, readability, stuffing) ──
-  const intel = analyzeContentIntel(pages, startUrl);
+  const intel = analyzeContentIntel(indexable, startUrl);
   const misaligned: { url: string; note?: string }[] = [];
   const hardToRead: { url: string; note?: string }[] = [];
   const stuffed: { url: string; note?: string }[] = [];
@@ -536,7 +635,7 @@ export function runDeterministicAudit(
   });
 
   // Thin content.
-  const thin = ok.filter((p) => p.wordCount < 120);
+  const thin = indexable.filter((p) => p.wordCount < 120);
   push({
     ruleId: "structure-thin-content",
     category: "structure",
@@ -614,7 +713,7 @@ export function runDeterministicAudit(
   });
 
   // ══ SCHEMA ════════════════════════════════════════════════════════
-  const noSchema = ok.filter((p) => p.jsonLd.length === 0);
+  const noSchema = indexable.filter((p) => p.jsonLd.length === 0);
   push({
     ruleId: "schema-missing",
     category: "schema",
@@ -625,7 +724,7 @@ export function runDeterministicAudit(
     effort: "medium",
     risk: "low",
     confidence: 90,
-    evidence: `${noSchema.length} of ${ok.length} pages emit no JSON-LD.`,
+    evidence: `${noSchema.length} of ${indexable.length} indexable pages emit no JSON-LD.`,
     affectedUrls: noSchema.map((p) => ({ url: norm(p.url) })),
     files: [{ path: fileHint(fw, "layout"), reason: "Add a JSON-LD script (WebSite/Organization at least).", confidence: 45 }],
     canAutoFix: true,
@@ -633,7 +732,7 @@ export function runDeterministicAudit(
 
   // Invalid structured data — parsed JSON-LD missing required properties.
   const invalidSchema: { url: string; note?: string }[] = [];
-  for (const p of ok) {
+  for (const p of indexable) {
     const probs = validateJsonLd(p);
     if (probs.length) invalidSchema.push({ url: norm(p.url), note: probs.slice(0, 3).join("; ") });
   }
@@ -678,6 +777,8 @@ export function runDeterministicAudit(
 
   // ══ INTERNAL LINKING (graph) ══════════════════════════════════════
   const graph = buildLinkGraph(pages, startUrl);
+  const optedOut = new Set(ok.filter((p) => isMetaNoindex(p)).map((p) => norm(p.url)));
+  const orphans = graph.orphans.filter((path) => !optedOut.has(path));
   push({
     ruleId: "link-orphan-pages",
     category: "internal-linking",
@@ -687,9 +788,20 @@ export function runDeterministicAudit(
     impact: "high",
     effort: "medium",
     risk: "low",
-    confidence: 90,
-    evidence: `${graph.orphans.length} pages have zero internal inbound links.`,
-    affectedUrls: graph.orphans.map((path) => ({ url: path })),
+    // Sitemap-seeded pages are the real orphans (nothing links to them); a
+    // crawl cut by the page cap can miss the page that links to one.
+    confidence: siteFiles?.crawlComplete === false ? 60 : 90,
+    evidence:
+      `${orphans.length} indexable pages have zero internal inbound links.` +
+      (siteFiles?.crawlComplete === false
+        ? ` The crawl stopped at ${pages.length} pages, so a page beyond the limit may still link to them.`
+        : ""),
+    affectedUrls: orphans.map((path) => {
+      const page = pages.find((pg) => norm(pg.url) === path);
+      return page?.discoveredVia === "sitemap"
+        ? { url: path, note: "listed in the sitemap, but no crawled page links to it" }
+        : { url: path };
+    }),
     files: [{ path: fileHint(fw, "page"), reason: "Add contextual links pointing to these pages.", confidence: 30 }],
     canAutoFix: false,
   });
@@ -760,14 +872,14 @@ export function runDeterministicAudit(
       existingEdges.add(`${graph.paths[i]} ${graph.paths[j]}`);
     }
   }
-  const content = analyzeContent(ok, startUrl, existingEdges);
+  const content = analyzeContent(indexable, startUrl, existingEdges);
 
   push({
     ruleId: "link-missing-internal-opportunities",
     category: "internal-linking",
     title: "Missing internal links between related pages",
     description:
-      "RankForge found topically-related pages that don't yet link to each other. Adding contextual internal links spreads link equity and helps users and crawlers discover related content.",
+      "Topically related pages don't link to each other yet. Adding contextual internal links spreads link equity and helps users and crawlers discover related content.",
     impact: "medium",
     effort: "low",
     risk: "low",
@@ -1044,6 +1156,55 @@ export function runDeterministicAudit(
       files: [{ path: fileHint(fw, "robots"), reason: "Add a Sitemap: line to robots.", confidence: 70 }],
       canAutoFix: true,
     });
+  }
+
+  // ══ MULTI-PAGE INDEXING CHECKS ════════════════════════════════════
+  // hreflang clusters, sitemap hygiene, canonical targets, soft 404s,
+  // robots.txt availability, HTTPS certificate (indexing-checks.ts).
+  for (const extra of runIndexingChecks({
+    pages,
+    startUrl,
+    siteFiles,
+    norm,
+    hints: {
+      page: fileHint(fw, "page"),
+      layout: fileHint(fw, "layout"),
+      sitemap: fileHint(fw, "sitemap"),
+      robots: fileHint(fw, "robots"),
+      config: fileHint(fw, "config"),
+    },
+  })) {
+    push(extra);
+  }
+
+  // ══ CORE WEB VITALS (real Chrome users, CrUX) ═════════════════════
+  const vitals = siteFiles?.vitals;
+  if (vitals) {
+    const weak = (["lcp", "inp", "cls"] as const).filter((k) => vitals[k] && vitals[k]!.rating !== "good");
+    if (weak.length) {
+      const poor = weak.some((k) => vitals[k]!.rating === "poor");
+      push({
+        ruleId: "perf-core-web-vitals",
+        category: "performance",
+        title: poor ? "Core Web Vitals are poor for real users" : "Core Web Vitals need improvement for real users",
+        description:
+          "Measured on real Chrome visits over the last 28 days (Google's CrUX data, the same data Search uses). Google counts a page as good when LCP ≤ 2.5 s, INP ≤ 200 ms and CLS ≤ 0.1 at the 75th percentile.",
+        impact: poor ? "high" : "medium",
+        effort: "medium",
+        risk: "low",
+        confidence: 95,
+        evidence:
+          `${vitals.scope === "url" ? "This URL" : "Whole origin (the URL has too few visits on its own)"}, p75${vitals.period ? ` ${vitals.period.first} → ${vitals.period.last}` : ""}: ` +
+          (["lcp", "inp", "cls"] as const)
+            .filter((k) => vitals[k])
+            .map((k) => formatVital(k, vitals[k]!))
+            .join(", ") +
+          ".",
+        affectedUrls: [{ url: norm(vitals.key), note: weak.map((k) => formatVital(k, vitals[k]!)).join(", ") }],
+        files: [{ path: fileHint(fw, "layout"), reason: "LCP and CLS usually come from the hero image, fonts and layout shifts.", confidence: 30 }],
+        canAutoFix: false,
+      });
+    }
   }
 
   // ── Scoring: per-category health from weighted issue penalties ─────

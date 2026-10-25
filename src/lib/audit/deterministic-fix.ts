@@ -36,7 +36,7 @@ function originOf(repo: Repository): string {
 function layoutFile(fw: Framework): string {
   const map: Record<Framework, string> = {
     nextjs: "app/layout.tsx",
-    nuxt: "nuxt.config.ts",
+    nuxt: "app.vue",
     astro: "src/layouts/Layout.astro",
     sveltekit: "src/app.html",
     remix: "app/root.tsx",
@@ -77,6 +77,25 @@ function make(
     confidence: partial.confidence ?? 92,
   };
 }
+
+/**
+ * Nuxt renders head tags from `app.head` in nuxt.config.ts, not from an HTML
+ * layout, so its patches add an entry there.
+ */
+function nuxtHeadDiff(entry: string[]): string {
+  return editDiff("nuxt.config.ts", [
+    ` export default defineNuxtConfig({`,
+    `+  app: {`,
+    `+    head: {`,
+    ...entry.map((l) => `+      ${l}`),
+    `+    },`,
+    `+  },`,
+    `   /* ...existing config... */`,
+    ` });`,
+  ]);
+}
+
+const NUXT_MERGE_NOTE = "If `app.head` already exists, merge the entry into it.";
 
 // ── robots.txt / robots route ───────────────────────────────────────
 const buildRobots: Builder = (issue, repo) => {
@@ -183,6 +202,14 @@ const buildViewport: Builder = (issue, repo) => {
         "Adds a `viewport` export so pages render responsively (required for mobile-first indexing).",
     });
   }
+  if (fw === "nuxt") {
+    return make(issue, "viewport", {
+      summary: "Set the responsive viewport in nuxt.config.ts.",
+      filesChanged: ["nuxt.config.ts"],
+      diff: nuxtHeadDiff([`viewport: "width=device-width, initial-scale=1",`]),
+      prDescription: `Sets \`app.head.viewport\` so pages render responsively (required for mobile-first indexing). ${NUXT_MERGE_NOTE}`,
+    });
+  }
   const path = layoutFile(fw);
   const diff = editDiff(path, [
     `   <head>`,
@@ -201,6 +228,15 @@ const buildViewport: Builder = (issue, repo) => {
 // ── html lang ───────────────────────────────────────────────────────
 const buildLang: Builder = (issue, repo) => {
   const fw = repo.framework;
+  if (fw === "nuxt") {
+    return make(issue, "html-lang", {
+      summary: 'Set the document language with lang="en" in nuxt.config.ts.',
+      filesChanged: ["nuxt.config.ts"],
+      diff: nuxtHeadDiff([`htmlAttrs: { lang: "en" },`]),
+      prDescription: `Sets \`app.head.htmlAttrs.lang\` (change "en" to your primary language if it isn't English). ${NUXT_MERGE_NOTE}`,
+      confidence: 85,
+    });
+  }
   const path = layoutFile(fw);
   const diff =
     fw === "nextjs"
@@ -217,6 +253,12 @@ const buildLang: Builder = (issue, repo) => {
 };
 
 // ── canonical ───────────────────────────────────────────────────────
+// A canonical added once to a shared layout has to resolve to EACH page's own
+// URL. A fixed href there (the homepage, say) tells search engines that every
+// page is a copy of that one, and they drop the others from the index.
+const SELF_CANONICAL_NOTE =
+  "A page that should point elsewhere (a duplicate, a filtered view) sets its own canonical instead.";
+
 const buildCanonical: Builder = (issue, repo) => {
   const fw = repo.framework;
   const origin = originOf(repo);
@@ -225,31 +267,123 @@ const buildCanonical: Builder = (issue, repo) => {
     const diff = editDiff(path, [
       ` export const metadata: Metadata = {`,
       `+  metadataBase: new URL("${origin}"),`,
-      `+  alternates: { canonical: "/" },`,
+      `+  // "./" resolves against each route's own path: every page points at itself.`,
+      `+  alternates: { canonical: "./" },`,
       `   /* ...existing metadata... */`,
       ` };`,
     ]);
     return make(issue, "canonical", {
-      summary: "Add metadataBase + per-page canonical via the Metadata API.",
+      summary: "Give every page a self-referencing canonical from the root layout (Metadata API).",
       filesChanged: [path],
       diff,
-      prDescription: `Sets \`metadataBase\` and a canonical. In each \`page.tsx\`, set \`alternates.canonical\` to that route's path so every page self-canonicalizes.`,
+      prDescription: `Sets \`metadataBase\` and \`alternates.canonical: "./"\` in the root layout. Next.js resolves \`./\` against each route's path, so every page gets its own URL as canonical, without query strings. Don't use \`"/"\` here: every page inherits the layout's metadata and would point at the homepage. ${SELF_CANONICAL_NOTE}`,
+      confidence: 88,
+    });
+  }
+  if (fw === "astro" || fw === "mdx") {
+    const path = layoutFile(fw);
+    const diff = editDiff(path, [
+      `   <head>`,
+      `+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site ?? "${origin}").href} />`,
+      `   </head>`,
+    ]);
+    return make(issue, "canonical", {
+      summary: "Add a self-referencing canonical to the shared layout, built from each page's path.",
+      filesChanged: [path],
+      diff,
+      prDescription: `Adds a \`<link rel="canonical">\` built from \`Astro.url.pathname\`, so every page using this layout points at its own URL. Set \`site\` in \`astro.config.mjs\` to your production domain. ${SELF_CANONICAL_NOTE}`,
+      confidence: 85,
+    });
+  }
+  if (fw === "sveltekit") {
+    const path = "src/routes/+layout.svelte";
+    const diff = editDiff(path, [
+      `+<script>`,
+      `+  import { page } from "$app/state";`,
+      `+</script>`,
+      `+`,
+      `+<svelte:head>`,
+      `+  <link rel="canonical" href={new URL(page.url.pathname, "${origin}").href} />`,
+      `+</svelte:head>`,
+    ]);
+    return make(issue, "canonical", {
+      summary: "Add a self-referencing canonical to the root layout, built from each page's path.",
+      filesChanged: [path],
+      diff,
+      prDescription: `Adds a canonical built from \`page.url.pathname\` to the root \`+layout.svelte\`, so every page points at its own URL. If the layout already has a \`<script>\` block, put the import there. Before SvelteKit 2.12, import \`page\` from \`$app/stores\` and read \`$page.url.pathname\`. ${SELF_CANONICAL_NOTE}`,
+      confidence: 82,
+    });
+  }
+  if (fw === "remix") {
+    const path = "app/root.tsx";
+    const diff = editDiff(path, [
+      `+import { useLocation } from "@remix-run/react";`,
+      ` `,
+      ` export function Layout({ children }: { children: React.ReactNode }) {`,
+      `+  const { pathname } = useLocation();`,
+      `   return (`,
+      `     <html lang="en">`,
+      `       <head>`,
+      `+        <link rel="canonical" href={new URL(pathname, "${origin}").href} />`,
+    ]);
+    return make(issue, "canonical", {
+      summary: "Add a self-referencing canonical to the root layout, built from the current path.",
+      filesChanged: [path],
+      diff,
+      prDescription: `Adds a canonical built from the current location in \`app/root.tsx\`, so every route points at its own URL. On React Router 7, import \`useLocation\` from \`react-router\`. ${SELF_CANONICAL_NOTE}`,
+      confidence: 82,
+    });
+  }
+  if (fw === "nuxt") {
+    const path = "app.vue";
+    const diff = editDiff(path, [
+      ` <script setup lang="ts">`,
+      `+const route = useRoute();`,
+      `+useHead({`,
+      `+  link: [{ rel: "canonical", href: computed(() => new URL(route.path, "${origin}").href) }],`,
+      `+});`,
+      ` </script>`,
+    ]);
+    return make(issue, "canonical", {
+      summary: "Add a self-referencing canonical in app.vue, built from the current route.",
+      filesChanged: [path],
+      diff,
+      prDescription: `Adds a canonical built from \`route.path\` in \`app.vue\`, so every page points at its own URL. If \`app.vue\` has no \`<script setup>\` block yet, add one. ${SELF_CANONICAL_NOTE}`,
       confidence: 80,
     });
   }
-  const path = layoutFile(fw);
+  if (fw === "vite-react") {
+    const path = "src/Canonical.tsx";
+    const code = [
+      `import { useLocation } from "react-router-dom";`,
+      ``,
+      `/** Self-referencing canonical for the current route. React 19 moves <link> into <head>. */`,
+      `export function Canonical() {`,
+      `  const { pathname } = useLocation();`,
+      `  return <link rel="canonical" href={new URL(pathname, "${origin}").href} />;`,
+      `}`,
+    ];
+    return make(issue, "canonical", {
+      summary: "Add a Canonical component that gives each route its own URL (React 19 + React Router).",
+      filesChanged: [path],
+      diff: newFileDiff(path, code),
+      prDescription: `Adds \`${path}\`. Render \`<Canonical />\` once inside your router, in the layout every route shares. Don't put a fixed canonical in \`index.html\`: a single-page app serves that file for every route, so they would all point at one URL. Crawlers that don't run JavaScript (most AI crawlers) won't see a canonical set at runtime; prerendering the routes fixes that. ${SELF_CANONICAL_NOTE}`,
+      confidence: 60,
+    });
+  }
+  // static: one HTML file per page, and index.html is the homepage.
+  const path = "index.html";
   const diff = editDiff(path, [
     `   <head>`,
     `+    <link rel="canonical" href="${origin}/" />`,
     `   </head>`,
   ]);
   return make(issue, "canonical", {
-    summary: "Add a canonical link to the document head.",
+    summary: "Add the homepage's canonical; every other page gets the same tag with its own URL.",
     filesChanged: [path],
     diff,
-    prDescription:
-      "Adds a `<link rel=\"canonical\">`. Set it per page to that page's own URL.",
-    confidence: 70,
+    prDescription: `Adds a canonical to \`index.html\`, the homepage. Each other HTML file needs the same tag with its own URL (\`${origin}/about/\` in \`about/index.html\`, and so on). Copying this one unchanged would tell search engines that every page is a copy of the homepage.`,
+    confidence: 75,
   });
 };
 
@@ -290,6 +424,15 @@ const buildSchema: Builder = (issue, repo) => {
       diff,
       prDescription: `Adds a JSON-LD \`WebSite\` block so search engines understand site identity:\n\n${fence}html\n${snippet}\n${fence}`,
       confidence: 82,
+    });
+  }
+  if (fw === "nuxt") {
+    return make(issue, "schema", {
+      summary: "Emit WebSite JSON-LD structured data from nuxt.config.ts.",
+      filesChanged: ["nuxt.config.ts"],
+      diff: nuxtHeadDiff([`script: [{ type: "application/ld+json", innerHTML: ${JSON.stringify(JSON.stringify(json))} }],`]),
+      prDescription: `Adds a JSON-LD \`WebSite\` block through \`app.head.script\` so search engines understand site identity. ${NUXT_MERGE_NOTE}`,
+      confidence: 78,
     });
   }
   const path = layoutFile(fw);
@@ -342,8 +485,17 @@ const buildOgImage: Builder = (issue, repo) => {
       confidence: 80,
     });
   }
-  const path = layoutFile(fw);
   const origin = originOf(repo);
+  if (fw === "nuxt") {
+    return make(issue, "og-image", {
+      summary: "Reference an OpenGraph image in nuxt.config.ts.",
+      filesChanged: ["nuxt.config.ts"],
+      diff: nuxtHeadDiff([`meta: [{ property: "og:image", content: "${origin}/og-cover.png" }],`]),
+      prDescription: `Adds an \`og:image\` meta through \`app.head.meta\`. Provide a 1200×630 image at \`public/og-cover.png\`. ${NUXT_MERGE_NOTE}`,
+      confidence: 65,
+    });
+  }
+  const path = layoutFile(fw);
   const diff = editDiff(path, [
     `   <head>`,
     `+    <meta property="og:image" content="${origin}/og-cover.png" />`,

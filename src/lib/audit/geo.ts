@@ -1,4 +1,5 @@
 import type { CrawledPage } from "./types";
+import { isNoindex } from "./robots-directives";
 
 /**
  * GEO — "generative engine optimization" readiness, measured deterministically.
@@ -27,6 +28,8 @@ export interface GeoCheck {
   detail: string;
   fix?: string;
   pages?: string[];
+  /** Reported for information only: never moves the score. */
+  informational?: boolean;
 }
 
 export interface AiBotAccess {
@@ -43,25 +46,45 @@ export interface GeoReport {
   bots: AiBotAccess[];
 }
 
-export const AI_BOTS: Omit<AiBotAccess, "allowed">[] = [
+/**
+ * Crawlers that decide whether AI answers can use a site, from each vendor's
+ * own documentation (checked 2026-10-25). "search" bots fetch pages to show or
+ * cite them; "training" bots collect data for models; user-triggered fetchers
+ * (ChatGPT-User, Claude-User, Perplexity-User) count as search because they
+ * serve a live answer. Googlebot is listed because AI Overviews and AI Mode
+ * are fed by Googlebot, not by Google-Extended.
+ */
+export const AI_BOTS: (Omit<AiBotAccess, "allowed"> & { fallback?: string })[] = [
+  { bot: "Googlebot", owner: "Google Search, incl. AI Overviews & AI Mode", purpose: "search" },
+  { bot: "Bingbot", owner: "Microsoft (Bing + Copilot)", purpose: "both" },
   { bot: "OAI-SearchBot", owner: "OpenAI (ChatGPT search)", purpose: "search" },
   { bot: "ChatGPT-User", owner: "OpenAI (user-triggered browsing)", purpose: "search" },
   { bot: "GPTBot", owner: "OpenAI (training)", purpose: "training" },
   { bot: "Claude-SearchBot", owner: "Anthropic (Claude search)", purpose: "search" },
   { bot: "Claude-User", owner: "Anthropic (user-triggered fetch)", purpose: "search" },
   { bot: "ClaudeBot", owner: "Anthropic (training)", purpose: "training" },
-  { bot: "PerplexityBot", owner: "Perplexity", purpose: "search" },
+  { bot: "PerplexityBot", owner: "Perplexity (search)", purpose: "search" },
   { bot: "Perplexity-User", owner: "Perplexity (user-triggered)", purpose: "search" },
-  { bot: "Google-Extended", owner: "Google (Gemini grounding & training)", purpose: "both" },
-  { bot: "Bingbot", owner: "Microsoft (Bing + Copilot)", purpose: "both" },
-  { bot: "Applebot-Extended", owner: "Apple Intelligence", purpose: "training" },
-  { bot: "CCBot", owner: "Common Crawl (feeds many models)", purpose: "training" },
+  { bot: "Google-Extended", owner: "Google (Gemini apps: training & grounding, not Search)", purpose: "both" },
+  // Apple: Applebot follows the Googlebot rules when robots.txt doesn't name it.
+  { bot: "Applebot", owner: "Apple (Siri & Spotlight search)", purpose: "search", fallback: "Googlebot" },
+  { bot: "Applebot-Extended", owner: "Apple Intelligence (training)", purpose: "training" },
+  { bot: "meta-webindexer", owner: "Meta AI (search)", purpose: "search" },
+  { bot: "meta-externalagent", owner: "Meta (training)", purpose: "training" },
+  { bot: "Amzn-SearchBot", owner: "Amazon (search)", purpose: "search" },
+  { bot: "Amazonbot", owner: "Amazon (training)", purpose: "training" },
+  { bot: "MistralAI-Index", owner: "Mistral (Le Chat search)", purpose: "search" },
+  { bot: "MistralAI-Training", owner: "Mistral (training)", purpose: "training" },
+  { bot: "DuckAssistBot", owner: "DuckDuckGo (DuckAssist answers)", purpose: "search" },
+  { bot: "CCBot", owner: "Common Crawl (open corpus, feeds many models)", purpose: "training" },
 ];
 
 // ── robots.txt ───────────────────────────────────────────────────────
 interface Group {
   agents: string[];
   rules: { allow: boolean; path: string }[];
+  /** Cloudflare Content-Signal lines declared in this group. */
+  signals: string[];
 }
 
 function parseRobots(txt: string): Group[] {
@@ -77,7 +100,7 @@ function parseRobots(txt: string): Group[] {
     const value = m[2]!.trim();
     if (key === "user-agent") {
       if (!current || !lastWasAgent) {
-        current = { agents: [], rules: [] };
+        current = { agents: [], rules: [], signals: [] };
         groups.push(current);
       }
       current.agents.push(value.toLowerCase());
@@ -87,6 +110,7 @@ function parseRobots(txt: string): Group[] {
       if (!current) continue;
       if (key === "disallow") current.rules.push({ allow: false, path: value });
       else if (key === "allow") current.rules.push({ allow: true, path: value });
+      else if (key === "content-signal") current.signals.push(value);
     }
   }
   return groups;
@@ -97,21 +121,73 @@ export function botAllowed(robotsTxt: string, bot: string, path = "/"): boolean 
   if (!robotsTxt.trim()) return true;
   const groups = parseRobots(robotsTxt);
   const name = bot.toLowerCase();
-  // Most specific matching group: an exact/substring agent match beats "*".
-  let group = groups.find((g) => g.agents.some((a) => a !== "*" && name.includes(a)));
-  group ??= groups.find((g) => g.agents.includes("*"));
-  if (!group) return true;
+  // Most specific matching groups: an agent-token match beats "*". RFC 9309
+  // merges every group naming the same agent; Google never merges a specific
+  // group with the "*" group.
+  let matching = groups.filter((g) => g.agents.some((a) => a !== "*" && name.includes(a)));
+  if (matching.length === 0) {
+    // Some crawlers inherit another one's rules when not named (Applebot
+    // follows Googlebot), before falling back to "*".
+    const fallback = AI_BOTS.find((b) => b.bot.toLowerCase() === name)?.fallback;
+    if (fallback) return botAllowed(robotsTxt, fallback, path);
+    matching = groups.filter((g) => g.agents.includes("*"));
+  }
+  if (matching.length === 0) return true;
   // Longest matching rule wins; Allow wins ties. Empty Disallow allows all.
   let best: { allow: boolean; len: number } | null = null;
-  for (const r of group.rules) {
+  for (const r of matching.flatMap((g) => g.rules)) {
     if (!r.path) continue;
-    const pattern = r.path.replace(/\*/g, "").replace(/\$$/, "");
-    if (path.startsWith(pattern)) {
+    if (robotsPathMatches(r.path, path)) {
       const len = r.path.length;
       if (!best || len > best.len || (len === best.len && r.allow)) best = { allow: r.allow, len };
     }
   }
   return best ? best.allow : true;
+}
+
+/**
+ * RFC 9309 path matching: rules match path prefixes, `*` matches any run of
+ * characters and a trailing `$` anchors the end ("/*.pdf$" matches
+ * "/a/b.pdf" but not "/a/b.pdf?x").
+ */
+export function robotsPathMatches(pattern: string, path: string): boolean {
+  const anchored = pattern.endsWith("$");
+  const body = anchored ? pattern.slice(0, -1) : pattern;
+  if (!body.includes("*")) return anchored ? path === body : path.startsWith(body);
+  const re = body
+    .split("*")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+  return new RegExp(`^${re}${anchored ? "$" : ""}`).test(path);
+}
+
+/**
+ * Content-Signal preferences declared in robots.txt (Cloudflare's convention,
+ * e.g. "search=yes, ai-train=no"). A vendor convention, not a standard.
+ */
+export function contentSignals(robotsTxt: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const g of parseRobots(robotsTxt)) {
+    if (!g.agents.includes("*")) continue;
+    for (const line of g.signals) {
+      for (const pair of line.split(",")) {
+        const m = pair.trim().match(/^([a-z-]+)\s*=\s*(yes|no)$/i);
+        if (m) out[m[1]!.toLowerCase()] = m[2]!.toLowerCase();
+      }
+    }
+  }
+  return out;
+}
+
+/** What is wrong with an llms.txt body, per llmstxt.org (empty = well formed). */
+export function llmsTxtProblems(txt: string): string[] {
+  const lines = txt.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const problems: string[] = [];
+  if (!lines[0] || !/^#\s+\S/.test(lines[0]) || /^##/.test(lines[0])) {
+    problems.push('it doesn\'t start with an H1 title ("# Your site"), the one required part');
+  }
+  if (!/\[[^\]]+\]\([^)\s]+\)/.test(txt)) problems.push("it contains no [name](url) links to your pages");
+  return problems;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -148,13 +224,11 @@ const QUESTION_RE = /\?\s*$|^(how|what|why|when|where|which|who|can|does|is|are|
 // ── the audit ────────────────────────────────────────────────────────
 export function runGeoAudit(
   pages: CrawledPage[],
-  site: { robotsTxt?: string; hasLlmsTxt?: boolean },
+  site: { robotsTxt?: string; hasLlmsTxt?: boolean; llmsTxt?: string },
 ): GeoReport {
   // Content checks only consider pages meant to be found: a noindex login or
   // checkout page isn't a citation candidate, so it must not drag the score.
-  const ok = pages.filter(
-    (p) => p.statusCode >= 200 && p.statusCode < 300 && !p.metaRobots?.includes("noindex"),
-  );
+  const ok = pages.filter((p) => p.statusCode >= 200 && p.statusCode < 300 && !isNoindex(p));
   const checks: GeoCheck[] = [];
   const robots = site.robotsTxt ?? "";
 
@@ -180,24 +254,40 @@ export function runGeoAudit(
     id: "geo-ai-training-bots",
     group: "access",
     title: "AI training crawlers",
-    // Blocking training is a legitimate choice — informational, never a fail.
+    // Blocking training is a legitimate choice: shown, never scored.
     status: blockedTraining.length === 0 ? "pass" : "warn",
+    informational: true,
     detail:
       blockedTraining.length === 0
         ? "Training crawlers are allowed (your content can inform future models)."
         : `You block ${blockedTraining.map((b) => b.bot).join(", ")}. That's a valid choice; it only affects future model training, not live AI search citations.`,
   });
 
+  const signals = contentSignals(robots);
+  if (Object.keys(signals).length) {
+    checks.push({
+      id: "geo-content-signals",
+      group: "access",
+      title: "Content signals declared",
+      status: "pass",
+      informational: true,
+      detail: `robots.txt declares Content-Signal: ${Object.entries(signals).map(([k, v]) => `${k}=${v}`).join(", ")}. It's Cloudflare's convention, not a standard: each crawler decides whether to honour it.`,
+    });
+  }
+
   // 2) Readable ──────────────────────────────────────────────────────
+  const llmsIssues = site.hasLlmsTxt && site.llmsTxt ? llmsTxtProblems(site.llmsTxt) : [];
   checks.push({
     id: "geo-llms-txt",
     group: "readable",
     title: "llms.txt index",
-    status: site.hasLlmsTxt ? "pass" : "warn",
-    detail: site.hasLlmsTxt
-      ? "/llms.txt is present."
-      : "No /llms.txt. It's an emerging convention giving AI tools a clean map of your most important pages.",
-    fix: site.hasLlmsTxt ? undefined : "Generate one: npx rankforge-cli llms <url> > public/llms.txt",
+    status: site.hasLlmsTxt && llmsIssues.length === 0 ? "pass" : "warn",
+    detail: !site.hasLlmsTxt
+      ? "No /llms.txt. It's a proposed convention (llmstxt.org) giving AI tools a clean map of your key pages; Lighthouse now checks for it. Google Search doesn't use it."
+      : llmsIssues.length
+        ? `/llms.txt is present, but ${llmsIssues.join(" and ")}.`
+        : "/llms.txt is present and well formed (H1 title and page links).",
+    fix: !site.hasLlmsTxt || llmsIssues.length ? "Generate one: npx rankforge-cli llms <url> --out public/llms.txt" : undefined,
   });
 
   // AI crawlers mostly don't run JavaScript: a big HTML shell with almost no
@@ -224,13 +314,15 @@ export function runGeoAudit(
   checks.push({
     id: "geo-answer-schema",
     group: "citable",
-    title: "Answer-shaped structured data",
+    title: "Structured data describing the content",
     status: answerSchema.length > 0 ? "pass" : "warn",
     detail:
       answerSchema.length > 0
-        ? `${answerSchema.length}/${ok.length} page(s) declare FAQ/HowTo/Article/Product-type schema.`
-        : "No page declares FAQ, HowTo, Article or Product schema — the types answer engines lean on to extract and attribute answers.",
-    fix: answerSchema.length ? undefined : "Add FAQPage or Article JSON-LD to your key pages (rankforge fix schema-missing prints a starter).",
+        ? `${answerSchema.length}/${ok.length} page(s) declare Article, Product, FAQ or similar schema.`
+        : "No page declares Article, Product, FAQ or similar schema, so machines must guess what each page is.",
+    fix: answerSchema.length
+      ? undefined
+      : "Add Article (or Product, SoftwareApplication) JSON-LD to your key pages: rankforge fix schema-missing prints a starter. Note FAQ and HowTo markup no longer produce rich results in Google.",
   });
 
   const orgPage = types.find(({ t }) => t.some((x) => x === "Organization" || x === "Person"));
@@ -323,6 +415,7 @@ export function runGeoAudit(
   let total = 0;
   let got = 0;
   for (const c of checks) {
+    if (c.informational) continue;
     const w = c.group === "access" && c.id === "geo-ai-search-bots" ? 3 : c.id === "geo-server-rendered" ? 2 : 1;
     total += w;
     got += w * (c.status === "pass" ? 1 : c.status === "warn" ? 0.5 : 0);

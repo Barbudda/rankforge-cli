@@ -1,13 +1,16 @@
 import type { Framework, Repository, SeoIssue } from "@/types";
-import { crawl, probeSiteFiles } from "@/lib/agents/crawl";
+import { scanSite } from "@/lib/agents/crawl";
 import { runDeterministicAudit } from "@/lib/audit/engine";
 import { probeResources } from "@/lib/audit/resource-probe";
 import { generateDeterministicFix } from "@/lib/audit/deterministic-fix";
-import { SEO_RULES } from "@/lib/audit/rules";
+import { RULE_CATALOG } from "@/lib/audit/catalog";
 import { searchCorpus } from "@/lib/support/corpus";
-import { ruleSlug } from "@/lib/seo/content";
 import { runGeoAudit, buildLlmsTxt } from "@/lib/audit/geo";
 import { config } from "@/lib/config";
+import { buildSnapshot, diffSnapshots } from "@/lib/audit/snapshot";
+import { computeOverallScore } from "@/lib/scoring";
+import { CATEGORY_WEIGHTS } from "@/lib/seo/constants";
+import type { CategoryScore, SeoCategory } from "@/types";
 
 /**
  * The RankForge agent's MCP toolbox — what an AI coding assistant (Claude
@@ -77,13 +80,16 @@ function asUrl(v: unknown): string {
   return u.toString();
 }
 
-async function runEngine(url: string, framework: Framework, maxPages: number) {
+// The local stdio server (rankforge mcp) runs on the user's machine and can
+// crawl more; the hosted route keeps the historic 24-page ceiling.
+// Read at call time: the CLI sets RANKFORGE_ALLOW_LOCAL after imports run.
+const pageCap = () => (process.env.RANKFORGE_ALLOW_LOCAL === "1" ? 200 : 24);
+const pagesArg = (v: unknown, def: number) => Math.max(1, Math.min(Number(v) || def, pageCap()));
+
+async function runEngine(url: string, framework: Framework, maxPages: number, ignoreRobots = false) {
   const repo = synthRepo(url, framework);
   // Keep the whole audit inside the route's 120s budget even for slow sites.
-  const [pages, siteFiles] = await Promise.all([
-    crawl(url, { maxPages, deadlineMs: 80_000 }),
-    probeSiteFiles(url),
-  ]);
+  const { pages, siteFiles } = await scanSite(url, { maxPages, hardCap: pageCap(), deadlineMs: 80_000, ignoreRobots });
   const resources =
     maxPages > 1 ? await probeResources(pages, url).catch(() => undefined) : undefined;
   return { engine: runDeterministicAudit(repo, pages, siteFiles, resources), pages, siteFiles };
@@ -115,14 +121,15 @@ export const MCP_TOOLS: McpTool[] = [
       properties: {
         url: { type: "string", description: "Start URL, e.g. http://localhost:3000/ or https://example.com/" },
         framework: { type: "string", enum: FRAMEWORKS, description: "Site framework (improves file hints). Default nextjs." },
-        maxPages: { type: "integer", minimum: 1, maximum: 24, description: "Pages to crawl (default 8)." },
+        maxPages: { type: "integer", minimum: 1, maximum: 200, description: "Pages to crawl (default 25; the hosted server caps at 24)." },
+        ignoreRobots: { type: "boolean", description: "Crawl paths robots.txt disallows for RankForgeBot. Only for your own site." },
       },
     },
     async handler(args) {
       const url = asUrl(args.url);
       const framework = asFramework(args.framework);
-      const maxPages = Math.max(1, Math.min(Number(args.maxPages) || 8, 24));
-      const { engine, pages } = await runEngine(url, framework, maxPages);
+      const maxPages = pagesArg(args.maxPages, 25);
+      const { engine, pages } = await runEngine(url, framework, maxPages, args.ignoreRobots === true);
       return JSON.stringify(
         {
           pagesCrawled: pages.length,
@@ -138,6 +145,62 @@ export const MCP_TOOLS: McpTool[] = [
           },
           nextSteps:
             "Fix issues directly in this repository. For issues with deterministicFixAvailable=true, call get_fix_template for an idiomatic starting patch. Re-run audit_site afterwards to verify.",
+        },
+        null,
+        1,
+      );
+    },
+  },
+  {
+    name: "compare_sites",
+    description:
+      "Compare two versions of a site and report SEO regressions: typically production (baseline) against your local dev server or a preview deployment (candidate). Pages are matched by path. Returns what changed (pages that now fail or redirect, new noindex, canonical changes, lost H1/description, robots.txt, sitemap, HTTPS certificate), new, worsened and fixed issues, and the score delta. Differences that only come from the environment (a preview's noindex header, its robots.txt, canonicals pointing at production) are listed separately and never counted as regressions. Run it before pushing to check a change didn't break SEO.",
+    inputSchema: {
+      type: "object",
+      required: ["baselineUrl", "candidateUrl"],
+      properties: {
+        baselineUrl: { type: "string", description: "The reference version, usually production, e.g. https://example.com/" },
+        candidateUrl: { type: "string", description: "The version to check, e.g. http://localhost:3000/ or a preview URL" },
+        maxPages: { type: "integer", minimum: 1, maximum: 200, description: "Pages to crawl on each side (default 25)." },
+      },
+    },
+    async handler(args) {
+      const baselineUrl = asUrl(args.baselineUrl);
+      const candidateUrl = asUrl(args.candidateUrl);
+      const maxPages = pagesArg(args.maxPages, 25);
+      const snapshotOf = async (url: string) => {
+        const { pages, siteFiles } = await scanSite(url, { maxPages, hardCap: pageCap(), deadlineMs: 50_000 });
+        const engine = runDeterministicAudit(synthRepo(url, "nextjs"), pages, siteFiles);
+        const list: CategoryScore[] = (Object.entries(engine.categoryScores) as [SeoCategory, number][]).map(
+          ([category, score]) => ({ category, score, issues: 0, weight: CATEGORY_WEIGHTS[category] }),
+        );
+        const geo = runGeoAudit(pages, siteFiles);
+        return buildSnapshot({ url, pages, engine, overall: computeOverallScore(list), geo, siteFiles });
+      };
+      const before = await snapshotOf(baselineUrl);
+      const after = await snapshotOf(candidateUrl);
+      const d = diffSnapshots(before, after);
+      const brief = (i: { ruleId: string; impact: string; title: string; paths: string[] }) => ({
+        ruleId: i.ruleId,
+        impact: i.impact,
+        title: i.title,
+        paths: i.paths.slice(0, 10),
+      });
+      return JSON.stringify(
+        {
+          summary: d.summary,
+          level: d.level,
+          crossOrigin: d.crossOrigin,
+          score: { baseline: d.from.overall, candidate: d.to.overall, delta: d.overallDelta },
+          changes: d.changes.slice(0, 40),
+          newIssues: d.newIssues.map(brief),
+          worsenedIssues: d.worsenedIssues.map(brief),
+          fixedIssues: d.resolvedIssues.map((i) => i.title),
+          environmentDifferences: d.environment.slice(0, 20),
+          nextSteps:
+            d.level === "critical"
+              ? "Fix the critical changes before shipping: they remove pages from search (noindex, errors, robots.txt)."
+              : "No critical regression. Review warnings, then ship.",
         },
         null,
         1,
@@ -250,16 +313,12 @@ export const MCP_TOOLS: McpTool[] = [
       required: ["url"],
       properties: {
         url: { type: "string", description: "Site URL, e.g. http://localhost:3000/ or https://example.com/" },
-        maxPages: { type: "integer", minimum: 1, maximum: 24, description: "Pages to crawl (default 8)." },
+        maxPages: { type: "integer", minimum: 1, maximum: 200, description: "Pages to crawl (default 12; the hosted server caps at 24)." },
       },
     },
     async handler(args) {
       const url = asUrl(args.url);
-      const maxPages = Math.max(1, Math.min(Number(args.maxPages) || 8, 24));
-      const [pages, siteFiles] = await Promise.all([
-        crawl(url, { maxPages, deadlineMs: 80_000 }),
-        probeSiteFiles(url),
-      ]);
+      const { pages, siteFiles } = await scanSite(url, { maxPages: pagesArg(args.maxPages, 12), hardCap: pageCap(), deadlineMs: 80_000 });
       return JSON.stringify(runGeoAudit(pages, siteFiles), null, 1);
     },
   },
@@ -277,25 +336,24 @@ export const MCP_TOOLS: McpTool[] = [
     },
     async handler(args) {
       const url = asUrl(args.url);
-      const maxPages = Math.max(1, Math.min(Number(args.maxPages) || 12, 24));
-      const pages = await crawl(url, { maxPages, deadlineMs: 80_000 });
+      const { pages } = await scanSite(url, { maxPages: pagesArg(args.maxPages, 25), hardCap: pageCap(), deadlineMs: 80_000 });
       return buildLlmsTxt(pages, url);
     },
   },
   {
     name: "list_rules",
     description:
-      "List RankForge's technical-SEO rule catalog: every issue class the audit detects, its category, default impact, whether a deterministic fix template exists, and its documentation URL.",
+      "List RankForge's technical-SEO rule catalog: every issue the audit can report, under the same ruleId audit_site returns, with its category, default impact, whether get_fix_template has a patch for it, and its documentation URL when there is one.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
       return JSON.stringify(
-        SEO_RULES.map((r) => ({
+        RULE_CATALOG.map((r) => ({
           id: r.id,
           category: r.category,
+          impact: r.impact,
           title: r.title,
-          impact: r.defaultImpact,
-          canAutoFix: r.canAutoFix,
-          docs: `${config.appUrl}/docs/issues/${ruleSlug(r.id)}`,
+          deterministicFixAvailable: (FIXABLE_RULES as readonly string[]).includes(r.id),
+          docs: r.doc ? `${config.appUrl}/docs/issues/${r.doc}` : null,
         })),
         null,
         1,

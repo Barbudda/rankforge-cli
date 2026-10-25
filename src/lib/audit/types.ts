@@ -65,6 +65,18 @@ export interface CrawledPage {
   imagesMissingDims: number;
   /** Click depth from the crawl start page (BFS); set by the crawler. */
   depth?: number;
+  /** X-Robots-Tag response header, lowercased; null when absent. */
+  xRobotsTag?: string | null;
+  /** The URL that was requested, when a redirect landed on `url` instead. */
+  requestedUrl?: string;
+  /** Other requested URLs that redirected to this same page (kept by the crawl's dedupe). */
+  redirectedFrom?: string[];
+  /**
+   * How the crawler reached the page: by following internal links, or only
+   * because the sitemap (or a caller-supplied seed) listed it. A "sitemap"
+   * page that no crawled page links to is a true orphan.
+   */
+  discoveredVia?: "link" | "sitemap" | "seed";
 }
 
 export interface Crawler {

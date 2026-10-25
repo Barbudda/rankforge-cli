@@ -1,7 +1,7 @@
 {
   "name": "rankforge-cli",
-  "version": "0.2.0",
-  "description": "Deterministic technical-SEO audit from your terminal. Crawls a site, measures real issues (metadata, indexing, images, links, schema, performance), prints a scored report and ready-to-apply patches. No AI, no API keys, no telemetry.",
+  "version": "0.3.0",
+  "description": "Technical SEO + AI-search (GEO) readiness audit: CLI, local MCP agent for Claude Code / Cursor / VS Code, GitHub Action. Measured, not guessed. No AI, no API keys.",
   "type": "module",
   "bin": {
     "rankforge": "dist/index.js"
@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/cli.test.mjs",
+    "test": "npm run build && node --test test/cli.test.mjs test/v3.test.mjs",
     "prepublishOnly": "npm test"
   },
   "keywords": [
@@ -35,7 +35,14 @@
     "sitemap",
     "robots",
     "structured-data",
-    "mcp"
+    "mcp",
+    "geo",
+    "generative-engine-optimization",
+    "llms-txt",
+    "ai-search",
+    "claude-code",
+    "cursor",
+    "mcp-server"
   ],
   "author": "Barbudda",
   "license": "MIT",

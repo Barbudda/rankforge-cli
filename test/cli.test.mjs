@@ -159,10 +159,43 @@ test("fix prints a framework-idiomatic diff", async () => {
   assert.notEqual(bad.code, 0);
 });
 
-test("rules lists the catalog", async () => {
+test("fix: a canonical in a shared layout points each page at itself", async () => {
+  // A fixed canonical in a layout every page uses tells search engines that
+  // all pages are copies of one URL. Only static sites patch a single file
+  // (index.html, the homepage itself).
+  for (const fw of ["nextjs", "nuxt", "astro", "sveltekit", "remix", "vite-react", "mdx"]) {
+    const { code, stdout } = await run(["fix", "indexing-canonical-missing", "--framework", fw, "--url", "https://example.com", "--json"]);
+    assert.equal(code, 0, fw);
+    const { diff } = JSON.parse(stdout);
+    assert.doesNotMatch(diff, /canonical: "\/"/, `${fw}: a root-layout canonical of "/" sends every page to the homepage`);
+    assert.doesNotMatch(diff, /href="https:\/\/example\.com\/?"/, `${fw}: a fixed href in a shared layout sends every page to the homepage`);
+  }
+  // Nuxt head tags live in nuxt.config.ts (app.head), never as HTML there.
+  for (const rule of ["perf-viewport-missing", "indexing-html-lang-missing", "schema-missing", "meta-og-image-missing"]) {
+    const { stdout } = await run(["fix", rule, "--framework", "nuxt", "--json"]);
+    const { diff, filesChanged } = JSON.parse(stdout);
+    assert.deepEqual(filesChanged, ["nuxt.config.ts"], rule);
+    assert.doesNotMatch(diff, /<\/?head>/, `${rule}: HTML in nuxt.config.ts`);
+    assert.match(diff, /app: \{/, rule);
+  }
+});
+
+test("rules lists every ruleId the engine can report", async () => {
   const { code, stdout } = await run(["rules", "--json"]);
   assert.equal(code, 0);
-  assert.ok(JSON.parse(stdout).length >= 10);
+  const listed = new Set(JSON.parse(stdout).map((r) => r.id));
+  // The engine sources sit next to cli/ here and next to test/ in the public
+  // repo; read whichever exists, so a new rule can't ship without its entry.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const auditDir = [join(here, "..", "..", "src", "lib", "audit"), join(here, "..", "src", "lib", "audit")].find((d) =>
+    existsSync(join(d, "engine.ts")),
+  );
+  assert.ok(auditDir, "engine sources not found");
+  const src = ["engine.ts", "indexing-checks.ts"].map((f) => readFileSync(join(auditDir, f), "utf8")).join("\n");
+  const emitted = new Set([...src.matchAll(/ruleId: "([a-z0-9-]+)"/g)].map((m) => m[1]));
+  assert.ok(emitted.size >= 50, `only ${emitted.size} ruleIds found in the engine sources`);
+  for (const id of emitted) assert.ok(listed.has(id), `${id} is missing from RULE_CATALOG (src/lib/audit/catalog.ts)`);
+  for (const id of listed) assert.ok(emitted.has(id), `${id} is in RULE_CATALOG but the engine never reports it`);
 });
 
 test("bad input fails cleanly, no stack trace", async () => {
@@ -203,7 +236,7 @@ test("mcp: stdio server speaks JSON-RPC and runs tools", async () => {
 
   assert.equal(replies.get(1).result.serverInfo.name, "rankforge");
   const tools = replies.get(2).result.tools.map((t) => t.name);
-  for (const t of ["audit_site", "audit_page", "geo_audit", "generate_llms_txt", "get_fix_template", "seo_docs", "list_rules"]) {
+  for (const t of ["audit_site", "compare_sites", "audit_page", "geo_audit", "generate_llms_txt", "get_fix_template", "seo_docs", "list_rules"]) {
     assert.ok(tools.includes(t), `tool ${t}`);
   }
   const geo = JSON.parse(replies.get(3).result.content[0].text);

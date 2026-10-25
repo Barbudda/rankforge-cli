@@ -1,0 +1,10 @@
+{
+  "name": "rankforge",
+  "version": "0.3.0",
+  "description": "Technical SEO and AI-search readiness, measured: audit a site (localhost included), compare it with production before you ship, and fix what it finds. No AI in the measurements, no API key.",
+  "author": { "name": "Barbudda" },
+  "homepage": "https://github.com/Barbudda/rankforge-cli",
+  "repository": "https://github.com/Barbudda/rankforge-cli",
+  "license": "MIT",
+  "keywords": ["seo", "technical-seo", "geo", "llms-txt", "hreflang", "core-web-vitals", "mcp"]
+}

@@ -1,5 +1,8 @@
 import type { CrawledPage } from "@/lib/audit/types";
-import { guardedFetch, assertUrlAllowed, ssrfEnforced } from "@/lib/net/ssrf";
+import { guardedFetch } from "@/lib/net/ssrf";
+import { botAllowed } from "@/lib/audit/geo";
+import { probeTls, type TlsInfo } from "@/lib/net/tls";
+import { scanSitemaps, sitemapsFromRobots } from "./sitemap";
 
 /**
  * Lightweight server-side crawler. Fetches the static HTML of a URL (no JS
@@ -243,6 +246,11 @@ async function readCapped(res: Response): Promise<string> {
   return out;
 }
 
+function stripHash(u: string): string {
+  const i = u.indexOf("#");
+  return i === -1 ? u : u.slice(0, i);
+}
+
 async function fetchPage(url: string): Promise<CrawledPage> {
   const started = Date.now();
   const ctrl = new AbortController();
@@ -262,34 +270,69 @@ async function fetchPage(url: string): Promise<CrawledPage> {
     const contentType = res.headers.get("content-type") ?? "";
     const isHtml = contentType.includes("text/html") || contentType === "";
     const finalUrl = res.url || url; // record the redirect target, not the request URL
+    const xRobotsTag = res.headers.get("x-robots-tag")?.toLowerCase() ?? null;
+    const tag = (page: CrawledPage): CrawledPage => {
+      page.xRobotsTag = xRobotsTag;
+      if (stripHash(finalUrl) !== stripHash(url)) page.requestedUrl = url;
+      return page;
+    };
     if (!res.ok || !isHtml) {
       const note = !res.ok
         ? `<!-- fetch-error: HTTP ${res.status} -->`
         : `<!-- fetch-error: non-HTML content-type ${contentType} -->`;
-      return parse(finalUrl, res.status, note, Date.now() - started, ttfb);
+      res.body?.cancel().catch(() => {});
+      return tag(parse(finalUrl, res.status, note, Date.now() - started, ttfb));
     }
     const html = await readCapped(res);
-    return parse(finalUrl, res.status, html, Date.now() - started, ttfb);
+    return tag(parse(finalUrl, res.status, html, Date.now() - started, ttfb));
   } finally {
     clearTimeout(timer);
   }
 }
 
 export interface SiteFiles {
-  /** /sitemap.xml returns 2xx. */
+  /** A sitemap was found and read (declared in robots.txt or at a conventional path). */
   hasSitemap: boolean;
-  /** /robots.txt returns 2xx. */
+  /** /robots.txt returns 2xx with a non-HTML body. */
   hasRobots: boolean;
   /** robots.txt contains a Sitemap: directive. */
   robotsDeclaresSitemap: boolean;
-  /** Raw robots.txt body (≤ 8 KB), "" when absent — used by the GEO audit. */
+  /** Raw robots.txt body (up to 100 KB), "" when absent. Used by the GEO audit and the crawler. */
   robotsTxt?: string;
+  /** robots.txt answered 200 with an HTML page (SPA fallback): crawlers get no rules. */
+  robotsIsHtml?: boolean;
+  /** HTTP status of /robots.txt (0 when unreachable). */
+  robotsStatus?: number;
+  /** HTTP status of a path that cannot exist: 200 means missing pages aren't 404s. */
+  notFoundStatus?: number;
+  /** The probe path used for notFoundStatus. */
+  notFoundProbe?: string;
+  /** Where the probe landed when the site redirected it. */
+  notFoundLandedOn?: string;
   /** /llms.txt returns 2xx with non-HTML content. */
   hasLlmsTxt?: boolean;
+  /** llms.txt body (up to 16 KB), for format validation. */
+  llmsTxt?: string;
+  /** Page URLs listed in the sitemap(s). */
+  sitemapUrls?: string[];
+  /** Sitemap files read. */
+  sitemapFiles?: string[];
+  /** A cap cut the sitemap scan short (very large sitemaps). */
+  sitemapTruncated?: boolean;
+  /** HTTPS certificate of the start URL's host; null on http:// or when unreachable. */
+  tls?: TlsInfo | null;
 }
 
-/** Probe the two well-known SEO files directly (cheap, deterministic). */
-export async function probeSiteFiles(startUrl: string): Promise<SiteFiles> {
+/**
+ * Probe the site-level files directly (cheap, deterministic): robots.txt,
+ * the sitemaps it declares (or the conventional ones), llms.txt, and the TLS
+ * certificate. Nothing here is inferred from the HTML.
+ */
+export async function probeSiteFiles(
+  startUrl: string,
+  /** `light`: a small sitemap read and short TLS timeout, for tight budgets (the free web audit). */
+  opts?: { sitemaps?: boolean; tls?: boolean; light?: boolean },
+): Promise<SiteFiles> {
   const origin = (() => {
     try {
       return new URL(startUrl).origin;
@@ -299,7 +342,7 @@ export async function probeSiteFiles(startUrl: string): Promise<SiteFiles> {
   })();
   if (!origin) return { hasSitemap: false, hasRobots: false, robotsDeclaresSitemap: false, robotsTxt: "", hasLlmsTxt: false };
 
-  const get = async (path: string) => {
+  const get = async (path: string, cap: number) => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
@@ -307,104 +350,272 @@ export async function probeSiteFiles(startUrl: string): Promise<SiteFiles> {
         signal: ctrl.signal,
         headers: { "user-agent": "RankForgeBot/1.0 (+https://rankforge.dev)" },
       });
-      const body = res.ok ? (await res.text()).slice(0, 8000) : "";
       const html = (res.headers.get("content-type") ?? "").includes("text/html");
-      return { ok: res.ok, body, html };
+      const finalUrl = res.url || `${origin}${path}`;
+      if (!res.ok) {
+        res.body?.cancel().catch(() => {});
+        return { ok: false, body: "", html, status: res.status, finalUrl };
+      }
+      const body = cap > 0 ? (await res.text()).slice(0, cap) : "";
+      if (cap === 0) res.body?.cancel().catch(() => {});
+      return { ok: true, body, html, status: res.status, finalUrl };
     } catch {
-      return { ok: false, body: "", html: false };
+      return { ok: false, body: "", html: false, status: 0, finalUrl: "" };
     } finally {
       clearTimeout(timer);
     }
   };
 
-  const [sitemap, robots, llms] = await Promise.all([
-    get("/sitemap.xml"),
-    get("/robots.txt"),
-    get("/llms.txt"),
+  // A path that cannot exist: a healthy site answers 404, not 200.
+  const notFoundProbe = `/rankforge-404-check-${Math.random().toString(36).slice(2, 10)}`;
+  const [robots, llms, tls, missing] = await Promise.all([
+    get("/robots.txt", 100_000),
+    get("/llms.txt", 16_000),
+    opts?.tls === false ? Promise.resolve(null) : probeTls(startUrl, opts?.light ? 3500 : 6000).catch(() => null),
+    get(notFoundProbe, 0),
   ]);
+  const landedPath = (() => {
+    try {
+      return new URL(missing.finalUrl).pathname;
+    } catch {
+      return notFoundProbe;
+    }
+  })();
+  const robotsIsHtml = robots.ok && robots.html;
+  const robotsTxt = robots.ok && !robots.html ? robots.body : "";
+  const declared = sitemapsFromRobots(robotsTxt, origin);
+
+  const sitemap =
+    opts?.sitemaps === false
+      ? null
+      : await scanSitemaps(
+          origin,
+          declared,
+          opts?.light ? { maxFiles: 2, maxUrls: 300, deadlineMs: 4000 } : undefined,
+        ).catch(() => null);
+
   return {
-    hasSitemap: sitemap.ok,
-    hasRobots: robots.ok,
-    robotsDeclaresSitemap: /(^|\n)\s*sitemap\s*:/i.test(robots.body),
-    robotsTxt: robots.ok ? robots.body : "",
-    // SPAs often answer every path with index.html — that's not an llms.txt.
+    hasSitemap: Boolean(sitemap && sitemap.files.length > 0),
+    hasRobots: robots.ok && !robots.html,
+    robotsIsHtml,
+    robotsStatus: robots.status,
+    notFoundStatus: missing.status || undefined,
+    notFoundProbe,
+    ...(missing.status && landedPath !== notFoundProbe ? { notFoundLandedOn: missing.finalUrl } : {}),
+    robotsDeclaresSitemap: declared.length > 0,
+    robotsTxt,
+    // SPAs often answer every path with index.html: that's not an llms.txt.
     hasLlmsTxt: llms.ok && !llms.html && llms.body.trim().length > 0,
+    llmsTxt: llms.ok && !llms.html ? llms.body : "",
+    sitemapUrls: sitemap?.urls ?? [],
+    sitemapFiles: sitemap?.files ?? [],
+    sitemapTruncated: sitemap?.truncated ?? false,
+    tls,
   };
 }
 
+export interface CrawlOptions {
+  maxPages?: number;
+  /** Overall wall-clock budget. */
+  deadlineMs?: number;
+  /**
+   * Ceiling for maxPages. Hosted routes keep the historic 24; the CLI, which
+   * runs on the user's machine, raises it.
+   */
+  hardCap?: number;
+  /** Parallel fetches (polite default 4, max 8). */
+  concurrency?: number;
+  /** robots.txt body: URLs it disallows for RankForgeBot are not fetched. */
+  robotsTxt?: string;
+  /**
+   * Extra URLs crawled once the link frontier is exhausted: sitemap entries
+   * (to find pages nothing links to) or previously known paths (monitoring).
+   */
+  seeds?: { url: string; via: "sitemap" | "seed" }[];
+}
+
+export interface CrawlResult {
+  pages: CrawledPage[];
+  /** Every internally linked page was crawled (no cap or deadline cut). */
+  complete: boolean;
+  /** Paths skipped because robots.txt disallows RankForgeBot there. */
+  blockedByRobots: string[];
+}
+
+const ASSET_RE = /\.(png|jpe?g|gif|svg|webp|avif|css|js|mjs|ico|pdf|zip|gz|xml|json|txt|woff2?|ttf|mp4|webm|mp3)$/i;
+
 /**
- * Crawl a site starting from `startUrl`, breadth-first over same-origin
- * internal links up to `maxPages`. Records the depth (clicks from the start
- * page) of every page reached, which the link-graph analysis reads.
+ * Crawl a site from `startUrl`, breadth-first over same-origin internal links,
+ * then over the seeds (sitemap entries…) the links did not reach. Fetches run
+ * in a small worker pool; robots.txt rules for RankForgeBot are honoured when
+ * the body is passed in.
  *
- * The deterministic engine has no per-page token cost, so we crawl deeper by
- * default (up to 24 pages) than the old LLM-only path did.
+ * Click depth is recomputed by the link graph, so the depth recorded here is
+ * only the discovery depth.
  */
-export async function crawl(
-  startUrl: string,
-  opts?: { maxPages?: number; deadlineMs?: number },
-): Promise<CrawledPage[]> {
-  const maxPages = Math.max(1, Math.min(opts?.maxPages ?? 12, 24));
+export async function crawlSite(startUrl: string, opts: CrawlOptions = {}): Promise<CrawlResult> {
+  const cap = Math.max(1, opts.hardCap ?? 24);
+  const maxPages = Math.max(1, Math.min(opts.maxPages ?? 12, cap));
+  const concurrency = Math.max(1, Math.min(opts.concurrency ?? 4, 8));
   // Overall wall-clock budget so a site of slow pages can't run past a route's
   // maxDuration (each page can take up to FETCH_TIMEOUT_MS on its own).
-  const deadline = Date.now() + Math.max(10_000, opts?.deadlineMs ?? 90_000);
-  const origin = new URL(startUrl).origin;
-  const startPath = new URL(startUrl).pathname;
+  const deadline = Date.now() + Math.max(10_000, opts.deadlineMs ?? 90_000);
+  const start = new URL(startUrl);
+  const origin = start.origin;
+  const robots = opts.robotsTxt ?? "";
+  const allowed = (u: URL) => !robots || botAllowed(robots, "RankForgeBot", u.pathname + u.search);
+
+  const blockedByRobots: string[] = [];
+  if (!allowed(start)) return { pages: [], complete: true, blockedByRobots: [start.pathname] };
+
+  type Job = { url: URL; depth: number; via: "link" | "sitemap" | "seed" };
+  const seen = new Set<string>([start.pathname]);
+  const queue: Job[] = [];
+  const consider = (u: URL, depth: number, via: Job["via"]) => {
+    if (u.origin !== origin || seen.has(u.pathname)) return;
+    if (ASSET_RE.test(u.pathname)) return;
+    seen.add(u.pathname);
+    if (!allowed(u)) {
+      blockedByRobots.push(u.pathname);
+      return;
+    }
+    queue.push({ url: u, depth, via });
+  };
+  const enqueueLinks = (page: CrawledPage, depth: number) => {
+    for (const l of page.links) {
+      if (!l.internal) continue;
+      try {
+        consider(new URL(l.href, page.url || startUrl), depth + 1, "link");
+      } catch {
+        /* skip malformed */
+      }
+    }
+  };
 
   const first = await fetchPage(startUrl);
   first.depth = 0;
+  first.discoveredVia = "link";
   const pages = [first];
-  if (maxPages === 1) return pages;
+  try {
+    seen.add(new URL(first.url).pathname);
+  } catch {
+    /* keep */
+  }
+  enqueueLinks(first, 0);
 
-  const seen = new Set([startPath]);
-  // BFS queue of {url, depth}; children inherit parent depth + 1.
-  const queue: { url: URL; depth: number }[] = [];
-  const enqueue = (page: CrawledPage, depth: number) => {
-    for (const l of page.links) {
-      if (!l.internal) continue;
+  const seeds = opts.seeds ?? [];
+  let seedIdx = 0;
+  let frontierDone = false;
+  const takeSeed = (): Job | undefined => {
+    frontierDone = true;
+    while (seedIdx < seeds.length) {
+      const s = seeds[seedIdx++]!;
       let u: URL;
       try {
-        u = new URL(l.href, startUrl);
+        u = new URL(s.url, startUrl);
       } catch {
         continue;
       }
-      if (u.origin !== origin || seen.has(u.pathname)) continue;
-      // Skip obvious non-HTML assets by extension.
-      if (/\.(png|jpe?g|gif|svg|webp|avif|css|js|ico|pdf|zip|xml|json|woff2?|ttf|mp4|webm)$/i.test(u.pathname)) continue;
-      queue.push({ url: u, depth: depth + 1 });
+      const before = queue.length;
+      consider(u, -1, s.via);
+      if (queue.length > before) return queue.shift();
+    }
+    return undefined;
+  };
+
+  let inFlight = 0;
+  const worker = async () => {
+    while (pages.length + inFlight < maxPages && Date.now() < deadline) {
+      let job = queue.shift();
+      if (!job) {
+        // Other workers may still add links: only fall back to seeds once
+        // the whole link frontier is drained, so seeds never starve links.
+        if (inFlight > 0) {
+          await new Promise((r) => setTimeout(r, 20));
+          continue;
+        }
+        job = takeSeed();
+        if (!job) break;
+      }
+      inFlight++;
+      try {
+        const page = await fetchPage(job.url.toString());
+        page.depth = job.depth;
+        page.discoveredVia = job.via;
+        try {
+          seen.add(new URL(page.url).pathname);
+        } catch {
+          /* keep */
+        }
+        if (pages.length < maxPages) {
+          pages.push(page);
+          enqueueLinks(page, Math.max(0, job.depth));
+        }
+      } catch {
+        /* skip pages that fail to fetch */
+      } finally {
+        inFlight--;
+      }
     }
   };
-  enqueue(first, 0);
+  if (maxPages > 1) await Promise.all(Array.from({ length: concurrency }, worker));
 
-  while (queue.length && pages.length < maxPages && Date.now() < deadline) {
-    const next = queue.shift()!;
-    if (seen.has(next.url.pathname)) continue;
-    seen.add(next.url.pathname);
-    try {
-      const page = await fetchPage(next.url.toString());
-      page.depth = next.depth;
-      pages.push(page);
-      enqueue(page, next.depth);
-    } catch {
-      /* skip pages that fail to fetch */
-    }
-  }
+  // "Complete" = the link frontier drained before a cap or the deadline hit.
+  const complete = queue.length === 0 && (frontierDone || maxPages === 1 || pages.length < maxPages);
 
   // Dedupe by FINAL pathname: two requested paths can land on the same page
-  // via a redirect (e.g. /dashboard → /login?next=/dashboard while /login is
+  // via a redirect (e.g. /dashboard -> /login?next=/dashboard while /login is
   // also linked directly). The BFS already treats pathname as page identity
-  // (query ignored), so the final dedupe follows the same rule — otherwise the
+  // (query ignored), so the final dedupe follows the same rule: otherwise the
   // same page is reported twice in every finding.
-  const seenFinal = new Set<string>();
-  return pages.filter((p) => {
+  const keptByKey = new Map<string, CrawledPage>();
+  const unique = pages.filter((p) => {
     let key = p.url;
     try {
       key = new URL(p.url).pathname.replace(/\/+$/, "") || "/";
     } catch {
       /* keep raw url as key */
     }
-    if (seenFinal.has(key)) return false;
-    seenFinal.add(key);
+    const kept = keptByKey.get(key);
+    if (kept) {
+      // Same landing page reached through a redirect: remember where from,
+      // so sitemap/canonical/hreflang checks can still say "redirects".
+      if (p.requestedUrl) (kept.redirectedFrom ??= []).push(p.requestedUrl);
+      return false;
+    }
+    keptByKey.set(key, p);
     return true;
   });
+  return { pages: unique, complete, blockedByRobots };
+}
+
+/**
+ * Probe the site files, then crawl with them: robots.txt honoured (unless
+ * `ignoreRobots`, for the owner's own site), sitemap entries nothing links
+ * to crawled after the linked pages. Throws when robots.txt disallows the
+ * start URL, so callers never audit an empty crawl.
+ */
+export async function scanSite(
+  startUrl: string,
+  opts: CrawlOptions & { light?: boolean; ignoreRobots?: boolean; sitemapSeeds?: number } = {},
+): Promise<{ pages: CrawledPage[]; siteFiles: SiteFiles & { crawlComplete: boolean }; blockedByRobots: string[] }> {
+  const siteFiles = await probeSiteFiles(startUrl, { light: opts.light });
+  const seeds = [
+    ...(opts.seeds ?? []),
+    ...(siteFiles.sitemapUrls ?? []).slice(0, opts.sitemapSeeds ?? 1000).map((u) => ({ url: u, via: "sitemap" as const })),
+  ];
+  const res = await crawlSite(startUrl, {
+    ...opts,
+    robotsTxt: opts.ignoreRobots ? undefined : siteFiles.robotsTxt,
+    seeds,
+  });
+  if (res.pages.length === 0 && res.blockedByRobots.length) {
+    throw new Error("robots.txt disallows RankForgeBot on this URL. If it's your own site, audit it with robots.txt ignored.");
+  }
+  return { pages: res.pages, siteFiles: { ...siteFiles, crawlComplete: res.complete }, blockedByRobots: res.blockedByRobots };
+}
+
+/** Back-compatible wrapper: just the pages. */
+export async function crawl(startUrl: string, opts?: CrawlOptions): Promise<CrawledPage[]> {
+  return (await crawlSite(startUrl, opts)).pages;
 }
