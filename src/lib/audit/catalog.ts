@@ -2,7 +2,7 @@ import type { SeoCategory, Severity } from "@/types";
 
 /**
  * Every issue the engine can report, under the ruleId audits return it with.
- * `rankforge rules` and the MCP list_rules tool read this list, and a test
+ * `septune rules` and the MCP list_rules tool read this list, and a test
  * checks that every ruleId in engine.ts and indexing-checks.ts appears here,
  * so the catalog can't drift from what audits actually report.
  *

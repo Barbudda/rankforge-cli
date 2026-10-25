@@ -4,7 +4,7 @@ import { lookup } from "node:dns/promises";
 /**
  * SSRF protection for the crawler and resource prober.
  *
- * These modules fetch arbitrary URLs — safe when RankForge runs locally
+ * These modules fetch arbitrary URLs — safe when Septune runs locally
  * (auditing your own dev server is the point), dangerous on a hosted instance
  * where a caller could steer it at cloud-metadata or internal services.
  *
@@ -124,7 +124,7 @@ export async function assertUrlAllowed(rawUrl: string): Promise<void> {
  *
  * NOTE: there is a residual DNS-rebinding window between validation and the
  * kernel connect for public names; connection-level IP pinning would close it
- * fully. For RankForge's threat model (a hosted auditor behind a bearer key)
+ * fully. For Septune's threat model (a hosted auditor behind a bearer key)
  * per-hop resolved-IP validation is the pragmatic guard.
  */
 export async function guardedFetch(

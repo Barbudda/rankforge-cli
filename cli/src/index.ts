@@ -21,18 +21,18 @@ import { renderHtmlReport } from "./html-report";
 import { runStdioServer } from "./mcp-stdio";
 
 /**
- * rankforge — deterministic technical-SEO audit, from the terminal.
+ * septune — deterministic technical-SEO audit, from the terminal.
  *
- *   rankforge audit <url> [--pages N] [--framework nextjs] [--json] [--fail-under N] [--save snap.json]
- *   rankforge diff <before> <after>  compare two snapshots or two live URLs (preview vs production)
- *   rankforge watch <url> --baseline snap.json   regression gate against a saved baseline
- *   rankforge vitals <url>         Core Web Vitals of real users (CrUX, needs CRUX_API_KEY)
- *   rankforge fix <ruleId> [--framework nextjs] [--url https://…]
- *   rankforge geo <url>            AI-search (GEO) readiness
- *   rankforge llms <url>           generate llms.txt
- *   rankforge links <url>          internal-link suggestions
- *   rankforge mcp                  local MCP server (stdio) for Claude Code / Cursor
- *   rankforge rules
+ *   septune audit <url> [--pages N] [--framework nextjs] [--json] [--fail-under N] [--save snap.json]
+ *   septune diff <before> <after>  compare two snapshots or two live URLs (preview vs production)
+ *   septune watch <url> --baseline snap.json   regression gate against a saved baseline
+ *   septune vitals <url>         Core Web Vitals of real users (CrUX, needs CRUX_API_KEY)
+ *   septune fix <ruleId> [--framework nextjs] [--url https://…]
+ *   septune geo <url>            AI-search (GEO) readiness
+ *   septune llms <url>           generate llms.txt
+ *   septune links <url>          internal-link suggestions
+ *   septune mcp                  local MCP server (stdio) for Claude Code / Cursor
+ *   septune rules
  *
  * No AI, no API keys, no telemetry. The same engine that powers www.rank-forge.dev.
  * (The only outbound call to a third party is the opt-in --vitals / vitals,
@@ -100,7 +100,7 @@ function asFramework(v: unknown): Framework {
 }
 
 function asUrl(v: string | undefined): string {
-  if (!v) return fail("Missing <url>. Example: rankforge audit https://example.com");
+  if (!v) return fail("Missing <url>. Example: septune audit https://example.com");
   const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
   try {
     const u = new URL(withScheme);
@@ -150,7 +150,7 @@ async function scanSite(url: string, args: Args, defaultPages: number): Promise<
     seeds,
   });
   if (res.pages.length === 0 && res.blockedByRobots.length) {
-    fail("robots.txt disallows RankForgeBot on this URL. If it's your own site, re-run with --ignore-robots.");
+    fail("robots.txt disallows SeptuneBot on this URL. If it's your own site, re-run with --ignore-robots.");
   }
   return { url, pages: res.pages, siteFiles: { ...siteFiles, crawlComplete: res.complete }, blockedByRobots: res.blockedByRobots };
 }
@@ -249,7 +249,7 @@ async function cmdAudit(args: Args) {
 
   if (typeof args.flags.save === "string") {
     writeFileSync(args.flags.save, JSON.stringify(snapshot, null, 2) + "\n");
-    process.stderr.write(`${c.green("✓")} snapshot saved to ${args.flags.save} (compare later: rankforge diff ${args.flags.save} <url>)\n`);
+    process.stderr.write(`${c.green("✓")} snapshot saved to ${args.flags.save} (compare later: septune diff ${args.flags.save} <url>)\n`);
   }
 
   if (failUnder !== null && overall < failUnder) {
@@ -278,7 +278,7 @@ function compactIssue(i: EngineIssue) {
 function auditToMarkdown(r: { url: string; pages: number; overall: number; issues: EngineIssue[]; geoScore: number }): string {
   const critical = r.issues.filter((i) => i.impact === "critical").length;
   const lines = [
-    `### RankForge · SEO audit: ${r.overall}/100${critical ? ` · ${critical} critical` : ""}`,
+    `### Septune · SEO audit: ${r.overall}/100${critical ? ` · ${critical} critical` : ""}`,
     "",
     `**${r.url}** · ${r.pages} pages · AI-search readiness ${r.geoScore}/100`,
     "",
@@ -318,7 +318,7 @@ function printReport(r: {
   const w = (s = "") => out.push(s);
 
   w("");
-  w(`${c.bold("RankForge audit")}  ${c.cyan(r.url)}`);
+  w(`${c.bold("Septune audit")}  ${c.cyan(r.url)}`);
   w(c.dim(`${r.pages} pages · ${r.elapsed}s · deterministic, no AI, no external API`));
   if (r.scan) {
     const sf = r.scan.siteFiles;
@@ -377,12 +377,12 @@ function printReport(r: {
 
   const gTone = r.geo.score >= 80 ? c.green : r.geo.score >= 60 ? c.yellow : c.red;
   const geoFails = r.geo.checks.filter((x) => x.status !== "pass" && !x.informational).length;
-  w(`${c.bold("AI search readiness")}  ${gTone(c.bold(`${r.geo.score}/100`))}  ${c.dim(geoFails ? `${geoFails} thing${geoFails > 1 ? "s" : ""} to improve, run: rankforge geo ${r.url}` : "all checks pass")}`);
+  w(`${c.bold("AI search readiness")}  ${gTone(c.bold(`${r.geo.score}/100`))}  ${c.dim(geoFails ? `${geoFails} thing${geoFails > 1 ? "s" : ""} to improve, run: septune geo ${r.url}` : "all checks pass")}`);
   w("");
 
   const fixable = r.issues.filter((i) => i.ruleId && FIXABLE_RULE_IDS.includes(i.ruleId));
   if (fixable.length) {
-    w(`${c.green("✚")} ${fixable.length} issue${fixable.length > 1 ? "s have" : " has"} a ready patch: ${c.cyan(`rankforge fix <ruleId> --framework <fw>`)}`);
+    w(`${c.green("✚")} ${fixable.length} issue${fixable.length > 1 ? "s have" : " has"} a ready patch: ${c.cyan(`septune fix <ruleId> --framework <fw>`)}`);
   }
   w(c.dim(`Full report, patches by file & the editor agent: ${APP_URL}`));
   w("");
@@ -469,7 +469,7 @@ function cmdRules(args: Args) {
     return;
   }
   const out: string[] = [""];
-  out.push(`${c.bold("Rule catalog")} ${c.dim(`(${RULE_CATALOG.length} site checks, plus the AI-search checks of rankforge geo)`)}`);
+  out.push(`${c.bold("Rule catalog")} ${c.dim(`(${RULE_CATALOG.length} site checks, plus the AI-search checks of septune geo)`)}`);
   let last = "";
   for (const r of RULE_CATALOG) {
     if (r.category !== last) {
@@ -481,7 +481,7 @@ function cmdRules(args: Args) {
     out.push(`  ${impactPaint[r.impact](r.impact.padEnd(8))} ${r.title}  ${c.dim(r.id)}${fix}`);
   }
   out.push("");
-  out.push(c.dim("Patch a rule with a fix template: rankforge fix <ruleId> --framework nextjs"));
+  out.push(c.dim("Patch a rule with a fix template: septune fix <ruleId> --framework nextjs"));
   out.push("");
   process.stdout.write(out.join("\n"));
 }
@@ -618,18 +618,18 @@ function readSnapshot(file: string): SiteSnapshot {
   try {
     parsed = JSON.parse(readFileSync(file, "utf8"));
   } catch {
-    return fail(`${file} isn't a readable RankForge snapshot (JSON).`);
+    return fail(`${file} isn't a readable Septune snapshot (JSON).`);
   }
   const snap = parsed as SiteSnapshot;
   if (!snap || typeof snap !== "object" || typeof snap.v !== "number" || !snap.pages || !Array.isArray(snap.issues)) {
-    return fail(`${file} isn't a RankForge snapshot. Create one with: rankforge audit <url> --save ${file}`);
+    return fail(`${file} isn't a Septune snapshot. Create one with: septune audit <url> --save ${file}`);
   }
   return snap;
 }
 
 /** A diff side: a saved snapshot file, or a live URL audited now. */
 async function resolveSide(arg: string | undefined, args: Args, label: string): Promise<SiteSnapshot> {
-  if (!arg) return fail(`Missing <${label}>. Usage: rankforge diff <before.json|url> <after.json|url>`);
+  if (!arg) return fail(`Missing <${label}>. Usage: septune diff <before.json|url> <after.json|url>`);
   if (existsSync(arg) || /\.json$/i.test(arg)) return readSnapshot(arg);
   const url = asUrl(arg);
   if (args.flags.json !== true) process.stderr.write(`${c.dim(`auditing ${url}…`)}\n`);
@@ -640,7 +640,7 @@ async function resolveSide(arg: string | undefined, args: Args, label: string): 
 function printDiff(d: SnapshotDiff) {
   const out: string[] = [""];
   const tone = d.level === "critical" ? c.red : d.level === "warning" ? c.yellow : c.green;
-  out.push(`${c.bold("RankForge diff")}  ${c.cyan(d.from.url)} ${c.gray("→")} ${c.cyan(d.to.url)}`);
+  out.push(`${c.bold("Septune diff")}  ${c.cyan(d.from.url)} ${c.gray("→")} ${c.cyan(d.to.url)}`);
   out.push(`${tone(c.bold(d.summary))}`);
   out.push("");
   const tag: Record<string, string> = { critical: c.red("CRITICAL"), warning: c.yellow("WARNING "), info: c.gray("info    ") };
@@ -681,7 +681,7 @@ async function cmdDiff(args: Args) {
 
 async function cmdWatch(args: Args) {
   const url = asUrl(args._[1]);
-  const baseline = typeof args.flags.baseline === "string" ? args.flags.baseline : ".rankforge/baseline.json";
+  const baseline = typeof args.flags.baseline === "string" ? args.flags.baseline : ".septune/baseline.json";
   const gate = asGate(args.flags["fail-on"], "critical");
   const json = args.flags.json === true;
   if (!json) process.stderr.write(`${c.dim(`auditing ${url}…`)}\n`);
@@ -741,7 +741,7 @@ async function cmdVitals(args: Args) {
 // ── help / main ───────────────────────────────────────────────────────
 function help() {
   process.stdout.write(`
-${c.bold("rankforge")} ${c.dim(`v${VERSION}`)}: deterministic technical-SEO audit. No AI, no API keys.
+${c.bold("septune")} ${c.dim(`v${VERSION}`)}: deterministic technical-SEO audit. No AI, no API keys.
 
 ${c.bold("Commands")}
   audit <url>    full technical-SEO audit + AI-search readiness summary
@@ -756,22 +756,22 @@ ${c.bold("Commands")}
   mcp            run as a local MCP server for Claude Code / Cursor / VS Code
 
 ${c.bold("Examples")}
-  rankforge audit http://localhost:3000
-  rankforge audit https://example.com --pages 12 --framework astro
-  rankforge audit https://example.com --json --fail-under 80     ${c.dim("# CI gate")}
-  rankforge audit https://example.com --html report.html         ${c.dim("# shareable report")}
-  rankforge audit https://example.com --save before.json         ${c.dim("# snapshot for later")}
-  rankforge diff https://example.com https://preview.example.com ${c.dim("# fails on critical regressions")}
-  rankforge watch https://example.com --baseline .rankforge/baseline.json
-  rankforge geo https://example.com
-  rankforge llms https://example.com --out public/llms.txt
-  rankforge fix framework-robots-missing --framework nextjs
-  claude mcp add rankforge -- npx -y rankforge-cli mcp           ${c.dim("# the agent, in your editor")}
+  septune audit http://localhost:3000
+  septune audit https://example.com --pages 12 --framework astro
+  septune audit https://example.com --json --fail-under 80     ${c.dim("# CI gate")}
+  septune audit https://example.com --html report.html         ${c.dim("# shareable report")}
+  septune audit https://example.com --save before.json         ${c.dim("# snapshot for later")}
+  septune diff https://example.com https://preview.example.com ${c.dim("# fails on critical regressions")}
+  septune watch https://example.com --baseline .septune/baseline.json
+  septune geo https://example.com
+  septune llms https://example.com --out public/llms.txt
+  septune fix framework-robots-missing --framework nextjs
+  claude mcp add septune -- npx -y septune mcp           ${c.dim("# the agent, in your editor")}
 
 ${c.bold("Flags")}
   --pages N        pages to crawl: linked pages first, then sitemap-only ones (default 25, max 500)
   --concurrency N  parallel requests (default 4, max 8)
-  --ignore-robots  crawl paths robots.txt disallows for RankForgeBot (your own site only)
+  --ignore-robots  crawl paths robots.txt disallows for SeptuneBot (your own site only)
   --save file      write a snapshot (audit) for diff / watch
   --fail-on gate   diff & watch: critical (default) | new (any new issue) | none
   --markdown file  audit, diff & watch: append a Markdown summary (e.g. $GITHUB_STEP_SUMMARY)
@@ -810,7 +810,7 @@ async function main() {
     else if (cmd === "watch") await cmdWatch(args);
     else if (cmd === "vitals") await cmdVitals(args);
     else if (cmd === "mcp") await runStdioServer();
-    else fail(`Unknown command "${cmd}". Try: rankforge --help`);
+    else fail(`Unknown command "${cmd}". Try: septune --help`);
   } catch (e) {
     fail(e instanceof Error ? e.message : String(e));
   }

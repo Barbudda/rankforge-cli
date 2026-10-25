@@ -8,7 +8,7 @@ import { normalizePath } from "./link-graph";
 import type { VitalsRating, VitalsReport } from "./vitals";
 
 /**
- * Snapshots and diffs: what makes RankForge a monitor instead of a one-off
+ * Snapshots and diffs: what makes Septune a monitor instead of a one-off
  * audit. A snapshot is the compact state of a site at one moment (scores,
  * issues, and the indexing-critical fields of every crawled page); a diff
  * says what changed between two of them, and how bad it is.
@@ -462,7 +462,7 @@ export function diffFails(d: SnapshotDiff, gate: "critical" | "new" | "none"): b
 export function diffToMarkdown(d: SnapshotDiff): string {
   const label = d.level === "critical" ? "Critical" : d.level === "warning" ? "Warning" : "OK";
   const lines: string[] = [];
-  lines.push(`### RankForge · ${label}: ${d.summary}`);
+  lines.push(`### Septune · ${label}: ${d.summary}`);
   lines.push("");
   lines.push(`Compared **${d.to.url}** with **${d.from.url}**. Score ${d.from.overall} → ${d.to.overall}.`);
   if (d.changes.length) {

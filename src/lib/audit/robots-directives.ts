@@ -32,8 +32,11 @@ export function headerDirectives(value: string | null | undefined, agent = "goog
 
 export interface RobotsSignals {
   metaRobots: string | null;
+  metaGooglebot?: string | null;
   xRobotsTag?: string | null;
 }
+
+const NOINDEX = /\b(noindex|none)\b/;
 
 /**
  * True when the page's own markup asks not to be indexed. Unlike the header,
@@ -41,7 +44,7 @@ export interface RobotsSignals {
  * to every response, never a meta tag.
  */
 export function isMetaNoindex(p: RobotsSignals): boolean {
-  return /\b(noindex|none)\b/.test((p.metaRobots ?? "").toLowerCase());
+  return NOINDEX.test((p.metaRobots ?? "").toLowerCase()) || NOINDEX.test((p.metaGooglebot ?? "").toLowerCase());
 }
 
 /** True when Google is told not to index the page (meta tag or header). */
@@ -53,7 +56,8 @@ export function isNoindex(p: RobotsSignals): boolean {
 /** Where the noindex comes from, for evidence ("meta robots: noindex, follow"). */
 export function noindexSource(p: RobotsSignals): string {
   const parts: string[] = [];
-  if (/\b(noindex|none)\b/.test((p.metaRobots ?? "").toLowerCase())) parts.push(`meta robots: ${p.metaRobots}`);
+  if (NOINDEX.test((p.metaRobots ?? "").toLowerCase())) parts.push(`meta robots: ${p.metaRobots}`);
+  if (NOINDEX.test((p.metaGooglebot ?? "").toLowerCase())) parts.push(`meta googlebot: ${p.metaGooglebot}`);
   if (headerDirectives(p.xRobotsTag).some((d) => d === "noindex" || d === "none")) {
     parts.push(`X-Robots-Tag header: ${p.xRobotsTag}`);
   }

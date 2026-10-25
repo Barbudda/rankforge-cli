@@ -287,7 +287,7 @@ export function runGeoAudit(
       : llmsIssues.length
         ? `/llms.txt is present, but ${llmsIssues.join(" and ")}.`
         : "/llms.txt is present and well formed (H1 title and page links).",
-    fix: !site.hasLlmsTxt || llmsIssues.length ? "Generate one: npx rankforge-cli llms <url> --out public/llms.txt" : undefined,
+    fix: !site.hasLlmsTxt || llmsIssues.length ? "Generate one: npx septune llms <url> --out public/llms.txt" : undefined,
   });
 
   // AI crawlers mostly don't run JavaScript: a big HTML shell with almost no
@@ -322,7 +322,7 @@ export function runGeoAudit(
         : "No page declares Article, Product, FAQ or similar schema, so machines must guess what each page is.",
     fix: answerSchema.length
       ? undefined
-      : "Add Article (or Product, SoftwareApplication) JSON-LD to your key pages: rankforge fix schema-missing prints a starter. Note FAQ and HowTo markup no longer produce rich results in Google.",
+      : "Add Article (or Product, SoftwareApplication) JSON-LD to your key pages: septune fix schema-missing prints a starter. Note FAQ and HowTo markup no longer produce rich results in Google.",
   });
 
   const orgPage = types.find(({ t }) => t.some((x) => x === "Organization" || x === "Person"));

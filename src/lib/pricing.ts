@@ -9,7 +9,7 @@ import type { Plan } from "@/types";
  */
 
 export interface PlanLimits {
-  /** Sites RankForge monitors on its own. */
+  /** Sites Septune monitors on its own. */
   sites: number;
   /** How often each monitored site is checked. */
   frequency: "daily" | "weekly";
@@ -28,7 +28,7 @@ export interface PricingTier {
   tagline: string;
   highlight?: boolean;
   cta: string;
-  /** CTA destination (signup during the beta, a checkout link once billing opens). */
+  /** CTA destination: the pre-order page until payments open, then the billing page (Stripe Checkout). */
   ctaHref: string;
   features: string[];
   limits: PlanLimits;
@@ -42,28 +42,22 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
 
 /**
  * Billing opens when NEXT_PUBLIC_RANKFORGE_BILLING=open (public so server
- * and client render the same CTA). Until then everyone gets Pro limits for
- * free, and the pricing page says so.
+ * and client render the same CTA). Until then Pro and Studio can only be
+ * pre-ordered (/preorder): everyone is on Free.
  */
 export const BILLING_OPEN = process.env.NEXT_PUBLIC_RANKFORGE_BILLING === "open";
 
-const CHECKOUT: Partial<Record<Plan, string | undefined>> = {
-  pro: process.env.NEXT_PUBLIC_RANKFORGE_CHECKOUT_PRO,
-  studio: process.env.NEXT_PUBLIC_RANKFORGE_CHECKOUT_STUDIO,
-};
-
-/** The plan whose limits apply: legacy values map to free, and the beta lifts free to Pro. */
+/** The plan whose limits apply; legacy values map to free. */
 export function effectivePlan(plan: string | null | undefined): Plan {
-  const p: Plan = plan === "pro" || plan === "studio" ? plan : "free";
-  if (!BILLING_OPEN && p === "free") return "pro";
-  return p;
+  return plan === "pro" || plan === "studio" ? plan : "free";
 }
 
 function ctaFor(plan: Plan): { cta: string; ctaHref: string } {
   if (plan === "free") return { cta: "Start free", ctaHref: "/signup" };
-  const checkout = CHECKOUT[plan];
-  if (BILLING_OPEN && checkout) return { cta: `Get ${plan === "pro" ? "Pro" : "Studio"}`, ctaHref: checkout };
-  return { cta: "Free during the beta", ctaHref: "/signup" };
+  // Signed-out visitors land on /login first, which brings them back here.
+  const name = plan === "pro" ? "Pro" : "Studio";
+  if (BILLING_OPEN) return { cta: `Get ${name}`, ctaHref: `/billing?plan=${plan}` };
+  return { cta: `Pre-order ${name}`, ctaHref: `/preorder?plan=${plan}&source=pricing` };
 }
 
 export const PRICING_TIERS: PricingTier[] = [
@@ -86,7 +80,7 @@ export const PRICING_TIERS: PricingTier[] = [
     id: "pro",
     name: "Pro",
     priceMonthly: 19,
-    tagline: "RankForge watches your production sites and tells you when a deploy breaks SEO.",
+    tagline: "Septune watches your production sites and tells you when a deploy breaks SEO.",
     highlight: true,
     ...ctaFor("pro"),
     limits: PLAN_LIMITS.pro,
@@ -114,13 +108,16 @@ export const PRICING_TIERS: PricingTier[] = [
   },
 ];
 
-/** Planned, not built. Shown as such, never as a plan feature. */
+/**
+ * Planned, not built. Shown as such, never as a plan feature. Written in
+ * mid-sentence case: both places that show it put it after a colon.
+ */
 export const ROADMAP = [
   "Google Search Console data (clicks, impressions, index status) next to each issue",
-  "Scheduled white-label reports emailed to your clients",
-  "Team seats",
+  "scheduled white-label reports emailed to your clients",
+  "team seats",
 ];
 
 export const BILLING_NOTE = BILLING_OPEN
-  ? "Monthly plans, cancel anytime. Prices include no hidden usage fees."
-  : "Billing isn't open yet: during the beta, Pro is free on every account. The prices shown are what plans will cost when billing opens, and you'll be told before anything changes.";
+  ? "Monthly plans in euros, paid by card through Stripe. Cancel anytime from the billing portal; your plan runs until the end of the month you paid for."
+  : "Pro and Studio open soon. Pre-order one and we'll email you the day it does; nothing is charged before you check out. Free works today.";

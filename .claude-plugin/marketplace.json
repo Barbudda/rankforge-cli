@@ -1,12 +1,12 @@
 {
-  "name": "rankforge",
-  "description": "RankForge: deterministic technical-SEO and AI-search audits for your coding assistant.",
+  "name": "septune",
+  "description": "Septune: deterministic technical-SEO and AI-search audits for your coding assistant.",
   "owner": { "name": "Barbudda" },
   "plugins": [
     {
-      "name": "rankforge",
+      "name": "septune",
       "source": "./plugin",
-      "description": "Audit, compare and fix technical SEO from Claude Code. RankForge's deterministic engine measures; Claude edits the repo."
+      "description": "Audit, compare and fix technical SEO from Claude Code. Septune's deterministic engine measures; Claude edits the repo."
     }
   ]
 }

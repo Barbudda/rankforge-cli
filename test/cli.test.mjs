@@ -234,7 +234,7 @@ test("mcp: stdio server speaks JSON-RPC and runs tools", async () => {
   await Promise.race([done, new Promise((_, rej) => setTimeout(() => rej(new Error("mcp timeout")), 30_000))]);
   child.kill();
 
-  assert.equal(replies.get(1).result.serverInfo.name, "rankforge");
+  assert.equal(replies.get(1).result.serverInfo.name, "septune");
   const tools = replies.get(2).result.tools.map((t) => t.name);
   for (const t of ["audit_site", "compare_sites", "audit_page", "geo_audit", "generate_llms_txt", "get_fix_template", "seo_docs", "list_rules"]) {
     assert.ok(tools.includes(t), `tool ${t}`);
@@ -246,7 +246,7 @@ test("mcp: stdio server speaks JSON-RPC and runs tools", async () => {
 
 test("package bin resolves the built file", () => {
   const pkg = JSON.parse(readFileSync(join(dirname(CLI), "..", "package.json"), "utf8"));
-  assert.equal(pkg.bin.rankforge, "dist/index.js", "npm normalizes ./ away; keep it canonical");
+  assert.equal(pkg.bin.septune, "dist/index.js", "npm normalizes ./ away; keep it canonical");
   const r = spawnSync(process.execPath, [CLI, "--version"], { encoding: "utf8" });
   assert.equal(r.stdout.trim(), pkg.version, "CLI version matches package.json");
 });

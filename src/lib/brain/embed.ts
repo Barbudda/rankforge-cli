@@ -3,11 +3,11 @@
  * native deps. A deterministic feature-hashing vectorizer: each text becomes a
  * fixed-dimension L2-normalized vector from its word tokens (lightly stemmed),
  * a small SEO-domain synonym map, and character trigrams (so near-matches and
- * typos still overlap). Cosine similarity over these vectors gives RankForge
+ * typos still overlap). Cosine similarity over these vectors gives Septune
  * genuine semantic recall that runs entirely in-process and works offline.
  *
  * It is not a neural embedding — it can't infer arbitrary synonymy — but with
- * stemming + a curated SEO synonym layer it matches the domain text RankForge
+ * stemming + a curated SEO synonym layer it matches the domain text Septune
  * actually stores (issues, fixes, notes) well, with zero dependencies.
  */
 

@@ -23,7 +23,7 @@ function makeSite({ preview = false } = {}) {
   const state = { after: false, base: "" };
   const page = (title, body, head = "") =>
     `<!doctype html><html lang="en"><head><title>${title}</title>
-    <meta name="description" content="${title}: a page of the fixture site used by the RankForge tests.">
+    <meta name="description" content="${title}: a page of the fixture site used by the Septune tests.">
     <meta name="viewport" content="width=device-width, initial-scale=1">${head}</head><body>${body}</body></html>`;
   const alt = (lang, path) => `<link rel="alternate" hreflang="${lang}" href="${state.base}${path}">`;
 
@@ -135,7 +135,7 @@ test("v3 audit: sitemap seeding, robots.txt, header noindex, hreflang, canonical
   const r = JSON.parse(stdout);
   const byId = Object.fromEntries(r.issues.map((i) => [i.ruleId, i]));
 
-  // robots.txt: /private is disallowed for every bot, so RankForgeBot skips it.
+  // robots.txt: /private is disallowed for every bot, so SeptuneBot skips it.
   assert.ok(r.crawl.blockedByRobots.includes("/private/area"), "honours robots.txt Disallow");
   assert.equal(r.crawl.sitemapUrls, 6, "reads the sitemap declared in robots.txt");
 
@@ -200,7 +200,7 @@ test("v3 audit --save + diff catches the regressions (and fails the gate)", asyn
   assert.ok(kinds.includes("page-error"), "/stable now 404s");
   assert.equal(diff.level, "critical");
   assert.equal(diff.crossOrigin, false);
-  assert.match(readFileSync(md, "utf8"), /RankForge · Critical/);
+  assert.match(readFileSync(md, "utf8"), /Septune · Critical/);
 });
 
 test("v3 watch: first run saves the baseline, an unchanged site passes", async () => {
@@ -240,7 +240,7 @@ test("v3 white-label HTML report", async () => {
   const html = readFileSync(out, "utf8");
   assert.match(html, /Prepared by <strong>Studio Lune<\/strong>/);
   assert.match(html, /--accent:#ff7a2f/);
-  assert.doesNotMatch(html, /rankforge/i, "no RankForge branding on a white-label report");
+  assert.doesNotMatch(html, /septune/i, "no Septune branding on a white-label report");
 });
 
 test("v3 vitals without a key explains how to get one (no network call)", async () => {
@@ -258,7 +258,7 @@ test("v3 audit --markdown writes the summary the pull-request comment uses", asy
   const r = await run(["audit", base, "--pages", "30", "--no-probe", "--markdown", md]);
   assert.equal(r.code, 0, r.stderr);
   const text = readFileSync(md, "utf8");
-  assert.match(text, /^### RankForge · SEO audit: \d+\/100 · \d+ critical/);
+  assert.match(text, /^### Septune · SEO audit: \d+\/100 · \d+ critical/);
   assert.match(text, /\| \*\*critical\*\* \| Pages set to noindex \| 1 \|/);
 });
 
@@ -311,7 +311,7 @@ test("v3 action: one pull-request comment, posted once and then updated in place
       child.on("close", (code) => resolve({ code, out }));
     });
   try {
-    writeFileSync(report, "### RankForge · Critical: 1 critical change: /pricing became noindex (robots meta tag)\n");
+    writeFileSync(report, "### Septune · Critical: 1 critical change: /pricing became noindex (robots meta tag)\n");
     const first = await node([report]);
     assert.equal(first.code, 0, first.out);
     assert.deepEqual(calls.map((c) => `${c.method} ${c.url.split("?")[0]}`), [
@@ -319,10 +319,10 @@ test("v3 action: one pull-request comment, posted once and then updated in place
       "POST /repos/acme/site/issues/7/comments",
     ]);
     assert.equal(calls[1].auth, "Bearer t0k");
-    assert.match(comments[0].body, /^<!-- rankforge-check -->\n### RankForge · Critical/);
+    assert.match(comments[0].body, /^<!-- septune-check -->\n### Septune · Critical/);
 
     // The next push edits the same comment instead of adding one.
-    writeFileSync(report, "### RankForge · OK: No SEO regressions · score 91 (+0)\n");
+    writeFileSync(report, "### Septune · OK: No SEO regressions · score 91 (+0)\n");
     const second = await node([report]);
     assert.equal(second.code, 0, second.out);
     assert.equal(calls.at(-1).method, "PATCH");

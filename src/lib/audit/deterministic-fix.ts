@@ -62,14 +62,14 @@ function make(
     summary: partial.summary,
     filesChanged: partial.filesChanged,
     diff: partial.diff,
-    branchName: partial.branchName ?? `rankforge/seo-${slug}`,
+    branchName: partial.branchName ?? `septune/seo-${slug}`,
     prTitle: partial.prTitle ?? `Fix: ${issue.title}`,
     prDescription: partial.prDescription,
     validationSteps:
       partial.validationSteps ?? [
         "Run the build and confirm it compiles.",
         "Load an affected URL and view source to verify the change is present.",
-        "Re-run the RankForge audit to confirm the issue clears.",
+        "Re-run the Septune audit to confirm the issue clears.",
       ],
     rollbackNotes:
       partial.rollbackNotes ??

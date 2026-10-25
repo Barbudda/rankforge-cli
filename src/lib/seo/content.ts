@@ -6,6 +6,7 @@
  */
 import { SEO_RULES } from "@/lib/audit/rules";
 import type { SeoRule } from "@/lib/audit/types";
+import { BILLING_OPEN } from "@/lib/pricing";
 
 /** URL slug for a rule: "meta.title.missing" → "meta-title-missing". */
 export function ruleSlug(id: string): string {
@@ -31,7 +32,7 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     slug: "nextjs",
     name: "Next.js",
     blurb:
-      "App Router metadata, generateMetadata on dynamic routes, sitemap.ts and robots.ts conventions. RankForge points each rendered issue at the route file most likely behind it.",
+      "App Router metadata, generateMetadata on dynamic routes, sitemap.ts and robots.ts conventions. Septune points each rendered issue at the route file most likely behind it.",
     metaApi: "generateMetadata / metadata export",
   },
   {
@@ -75,11 +76,11 @@ export function rulesForFramework(slug: string): SeoRule[] {
  */
 export const FAQS = [
   {
-    q: "What does RankForge actually do?",
+    q: "What does Septune actually do?",
     a: "It checks your site's technical SEO at the three moments it breaks: in your editor before you push (the CLI or the Claude Code plugin), on every pull request (a GitHub Action that compares the preview with production and comments the result), and in production (scheduled checks with alerts). The measurements are deterministic: no AI guesses, and every finding cites its evidence.",
   },
   {
-    q: "Does RankForge replace SEO experts?",
+    q: "Does Septune replace SEO experts?",
     a: "No. It catches the technical breakage that slips through code review: noindex, canonicals, robots.txt, sitemaps, structured data. Strategy, content and links stay with people.",
   },
   {
@@ -87,8 +88,8 @@ export const FAQS = [
     a: "Any site that serves HTML can be audited. Ready patches are written for Next.js, Nuxt, Astro, SvelteKit, Remix, Vite + React, MDX and static sites, with the deepest support for Next.js.",
   },
   {
-    q: "Can RankForge change my code or my main branch?",
-    a: "No. RankForge never writes to your repository. It reads your rendered pages; fixes reach your code through your own pull requests, written by you or your AI editor.",
+    q: "Can Septune change my code or my main branch?",
+    a: "No. Septune never writes to your repository. It reads your rendered pages; fixes reach your code through your own pull requests, written by you or your AI editor.",
   },
   {
     q: "Does it need access to my repository?",
@@ -103,20 +104,20 @@ export const FAQS = [
     a: "noindex, robots.txt, canonicals, pages that start failing or redirecting, the sitemap, the HTTPS certificate and the Core Web Vitals of real users. Each check is compared with the previous one, and you're alerted by email, Slack, Discord or webhook when something critical changes.",
   },
   {
-    q: "What kinds of SEO issues does RankForge find?",
+    q: "What kinds of SEO issues does Septune find?",
     a: "54 checks: metadata (titles, descriptions, OpenGraph), indexing (noindex, canonicals, hreflang, soft 404s, robots.txt, sitemaps, HTTPS), page structure, images, structured data against Google's required properties, internal linking, performance and Core Web Vitals, plus 12 AI-search readiness checks.",
   },
   {
-    q: "How is RankForge different from Screaming Frog or Ahrefs?",
-    a: "Crawlers and SEO suites audit what is already live. RankForge runs its checks before a change ships, on localhost and on the preview of every pull request compared with production, then keeps watching production. It doesn't do backlinks, rankings or keyword data, which need a search index RankForge doesn't have.",
+    q: "How is Septune different from Screaming Frog or Ahrefs?",
+    a: "Crawlers and SEO suites audit what is already live. Septune runs its checks before a change ships, on localhost and on the preview of every pull request compared with production, then keeps watching production. It doesn't do backlinks, rankings or keyword data, which need a search index Septune doesn't have.",
   },
   {
     q: "Does it work with GitLab or Bitbucket?",
-    a: "The CLI works in any CI: npx rankforge-cli diff <production> <preview> exits 1 on a critical regression and can write a Markdown summary. The pull-request comment is built for GitHub today.",
+    a: "The CLI works in any CI: npx septune diff <production> <preview> exits 1 on a critical regression and can write a Markdown summary. The pull-request comment is built for GitHub today.",
   },
   {
     q: "Will this improve my Google rankings?",
-    a: "No tool can honestly promise rankings, and RankForge doesn't. It keeps the technical layer working so your pages can be crawled, rendered and indexed correctly, which is the part of SEO your code controls.",
+    a: "No tool can honestly promise rankings, and Septune doesn't. It keeps the technical layer working so your pages can be crawled, rendered and indexed correctly, which is the part of SEO your code controls.",
   },
   {
     q: "Does it support agencies?",
@@ -124,18 +125,18 @@ export const FAQS = [
   },
   {
     q: "Does it work with monorepos?",
-    a: "Yes. RankForge audits URLs, not repositories: point it at the app's preview and production URLs wherever its code lives.",
+    a: "Yes. Septune audits URLs, not repositories: point it at the app's preview and production URLs wherever its code lives.",
   },
   {
     q: "Are the patches safe to apply?",
     a: "Mechanical patches (robots.txt, sitemap, canonical, viewport, lang, JSON-LD, OpenGraph) are written for your framework and come with notes on what to adapt. Apply them on a branch and let the pull-request check confirm the issue cleared and nothing else broke.",
   },
   {
-    q: "Can I try RankForge without an account?",
-    a: "Yes. The free audit at /audit crawls 3 pages of any public URL and shows every measured issue with evidence, no signup. For unlimited audits (including localhost) use the open-source CLI: npx rankforge-cli audit <url>.",
+    q: "Can I try Septune without an account?",
+    a: "Yes. The free audit at /audit crawls 3 pages of any public URL and shows every measured issue with evidence, no signup. For unlimited audits (including localhost) use the open-source CLI: npx septune audit <url>.",
   },
   {
-    q: "Can I use RankForge from my editor?",
+    q: "Can I use Septune from my editor?",
     a: "Yes. Install the Claude Code plugin, or connect the MCP server to Cursor, VS Code or any MCP-capable assistant. Your coding agent audits localhost or production, pulls fix templates, patches the repository it already has open, and compares the result with production. See the guide at /docs/agent.",
   },
 ];
@@ -144,7 +145,7 @@ export const FAQS = [
 export const PRICING_FAQS = [
   {
     q: "What do I pay for, exactly?",
-    a: "For RankForge watching your production sites on its own: a check every day, and an alert the moment a deploy makes a page noindex, blocks Google in robots.txt, breaks a canonical, takes a page down or lets the HTTPS certificate expire. Audits from the CLI and your editor are free and unlimited.",
+    a: "For Septune watching your production sites on its own: a check every day, and an alert the moment a deploy makes a page noindex, blocks Google in robots.txt, breaks a canonical, takes a page down or lets the HTTPS certificate expire. Audits from the CLI and your editor are free and unlimited.",
   },
   {
     q: "Is there a free plan?",
@@ -156,11 +157,15 @@ export const PRICING_FAQS = [
   },
   {
     q: "Can I cancel anytime?",
-    a: "Yes. Plans will be monthly with no lock-in. After a downgrade, your check history stays readable within the new plan's window (3 months on Free).",
+    a: BILLING_OPEN
+      ? "Yes. Plans are monthly with no lock-in: cancel from the billing portal and your plan runs until the end of the month you paid for. After a downgrade, your check history stays readable within the new plan's window (3 months on Free)."
+      : "Yes. Plans will be monthly with no lock-in. After a downgrade, your check history stays readable within the new plan's window (3 months on Free).",
   },
   {
     q: "Is billing open?",
-    a: "Not yet. During the beta, Pro is free on every account. The prices on this page are what the plans will cost when billing opens, and you'll be told before anything changes.",
+    a: BILLING_OPEN
+      ? "Yes. Pro and Studio are paid monthly by card through Stripe, and Free stays free. Invoices and receipts are in the billing portal."
+      : "Not yet. Pre-order Pro or Studio and we'll email you the day it opens; a pre-order is only an email address, and nothing is charged before you check out. The free plan works today.",
   },
 ];
 
@@ -170,10 +175,18 @@ export type ChangelogEntry = { date: string; title: string; notes: string[] };
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-25",
+    title: "RankForge is now Septune",
+    notes: [
+      "Same product, new name. The CLI is now npx septune, the GitHub Action Barbudda/septune and the Claude Code plugin septune.",
+      "The rankforge-cli package stays installable at 0.2.0 but won't get updates: switch to septune for everything since.",
+    ],
+  },
+  {
+    date: "2026-10-25",
     title: "Monitoring, regression gates and a crawler that reads sites like Google",
     notes: [
-      "Monitoring: RankForge checks your production site on a schedule and alerts you by email, Slack, Discord or webhook when a page starts failing, turns noindex, gets blocked by robots.txt, or when the sitemap or the HTTPS certificate breaks.",
-      "rankforge diff and watch compare two versions of a site, page by page, and exit 1 on critical changes. The GitHub Action takes a baseline-url to gate pull requests: preview against production.",
+      "Monitoring: Septune checks your production site on a schedule and alerts you by email, Slack, Discord or webhook when a page starts failing, turns noindex, gets blocked by robots.txt, or when the sitemap or the HTTPS certificate breaks.",
+      "septune diff and watch compare two versions of a site, page by page, and exit 1 on critical changes. The GitHub Action takes a baseline-url to gate pull requests: preview against production.",
       "Crawler: sitemap-seeded, up to 500 pages, robots.txt read the way Googlebot reads it, X-Robots-Tag headers, hreflang, canonical targets, soft 404s, sitemap hygiene and certificate checks.",
       "Core Web Vitals of real users from Google's Chrome UX Report, and 21 AI crawlers checked for AI-search access.",
       "A Claude Code plugin with the MCP tools and two skills, and a compare_sites tool for your editor.",

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Posts RankForge's result on the pull request as ONE comment, updated in
+// Posts Septune's result on the pull request as ONE comment, updated in
 // place on every push (found again by a hidden marker), the way coverage and
 // Lighthouse bots do. Run by action.yml; zero dependencies, Node 18+.
 //
@@ -11,13 +11,13 @@
 // posted must never fail the SEO check itself.
 import { existsSync, readFileSync } from "node:fs";
 
-const MARKER = "<!-- rankforge-check -->";
+const MARKER = "<!-- septune-check -->";
 // GitHub rejects comment bodies over 65,536 characters.
 const MAX_BODY = 60_000;
 const api = (process.env.GITHUB_API_URL || "https://api.github.com").replace(/\/$/, "");
 
 function warn(message) {
-  console.log(`::warning title=RankForge::${message}`);
+  console.log(`::warning title=Septune::${message}`);
   process.exit(0);
 }
 
@@ -35,7 +35,7 @@ try {
   // No event file: not running in GitHub Actions.
 }
 if (!pr) {
-  console.log("RankForge: not a pull request, so no comment.");
+  console.log("Septune: not a pull request, so no comment.");
   process.exit(0);
 }
 
@@ -48,7 +48,7 @@ const headers = {
   accept: "application/vnd.github+json",
   "x-github-api-version": "2022-11-28",
   "content-type": "application/json",
-  "user-agent": "rankforge-action",
+  "user-agent": "septune-action",
 };
 
 async function call(method, path, payload) {
@@ -73,7 +73,7 @@ const body = [
   MARKER,
   report,
   "",
-  "<sub>Measured by [RankForge](https://github.com/Barbudda/rankforge-cli): deterministic, no AI, never writes to your repository. Reproduce it locally with <code>npx rankforge-cli</code>.</sub>",
+  "<sub>Measured by [Septune](https://github.com/Barbudda/septune): deterministic, no AI, never writes to your repository. Reproduce it locally with <code>npx septune</code>.</sub>",
 ].join("\n");
 
 // The comment from an earlier push, if any (newest pull requests rarely pass
@@ -88,4 +88,4 @@ for (let page = 1; page <= 10 && !existing; page++) {
 
 if (existing) await call("PATCH", `/repos/${repo}/issues/comments/${existing.id}`, { body });
 else await call("POST", `/repos/${repo}/issues/${pr}/comments`, { body });
-console.log(`RankForge: ${existing ? "updated" : "posted"} the pull-request comment.`);
+console.log(`Septune: ${existing ? "updated" : "posted"} the pull-request comment.`);

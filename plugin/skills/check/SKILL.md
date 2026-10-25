@@ -1,5 +1,5 @@
 ---
-description: Before shipping, compare the local or preview version of the site with production using RankForge's compare_sites tool, and stop if the change breaks SEO (pages that start failing or redirecting, new noindex, robots.txt blocking Google, broken canonicals). Use when the user is about to push, merge or deploy, or asks whether a change broke SEO.
+description: Before shipping, compare the local or preview version of the site with production using Septune's compare_sites tool, and stop if the change breaks SEO (pages that start failing or redirecting, new noindex, robots.txt blocking Google, broken canonicals). Use when the user is about to push, merge or deploy, or asks whether a change broke SEO.
 ---
 
 # Pre-ship SEO check
@@ -19,7 +19,7 @@ description: Before shipping, compare the local or preview version of the site w
 4. **Offer the CI gate** so this runs on every pull request:
 
    ```yaml
-   - uses: Barbudda/rankforge-cli@v0.3.0
+   - uses: Barbudda/septune@v0.3.0
      with:
        url: ${{ steps.deploy.outputs.preview-url }}
        baseline-url: https://your-site.com

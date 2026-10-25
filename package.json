@@ -1,10 +1,10 @@
 {
-  "name": "rankforge-cli",
+  "name": "septune",
   "version": "0.3.0",
   "description": "Technical SEO + AI-search (GEO) readiness audit: CLI, local MCP agent for Claude Code / Cursor / VS Code, GitHub Action. Measured, not guessed. No AI, no API keys.",
   "type": "module",
   "bin": {
-    "rankforge": "dist/index.js"
+    "septune": "dist/index.js"
   },
   "files": [
     "dist",
@@ -48,11 +48,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Barbudda/rankforge-cli.git"
+    "url": "git+https://github.com/Barbudda/septune.git"
   },
-  "homepage": "https://github.com/Barbudda/rankforge-cli#readme",
+  "homepage": "https://github.com/Barbudda/septune#readme",
   "bugs": {
-    "url": "https://github.com/Barbudda/rankforge-cli/issues"
+    "url": "https://github.com/Barbudda/septune/issues"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

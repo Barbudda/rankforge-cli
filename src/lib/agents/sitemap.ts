@@ -12,7 +12,7 @@ import { guardedFetch } from "@/lib/net/ssrf";
  * redirect, error, are noindex or canonicalise elsewhere).
  */
 
-const UA = "RankForgeBot/1.0 (+https://www.rank-forge.dev/docs/agent)";
+const UA = "SeptuneBot/1.0 (+https://www.rank-forge.dev/docs/agent)";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 export interface SitemapScan {

@@ -1,10 +1,10 @@
 ---
-description: Audit and fix the technical SEO and AI-search readiness of the site in this repository with RankForge's deterministic engine (MCP tools audit_site, get_fix_template, geo_audit, generate_llms_txt). Use when the user asks to audit or fix SEO, indexing, robots.txt, sitemaps, canonicals, hreflang, structured data or internal links, to make the site visible to AI search (ChatGPT, Claude, Perplexity), or to generate an llms.txt.
+description: Audit and fix the technical SEO and AI-search readiness of the site in this repository with Septune's deterministic engine (MCP tools audit_site, get_fix_template, geo_audit, generate_llms_txt). Use when the user asks to audit or fix SEO, indexing, robots.txt, sitemaps, canonicals, hreflang, structured data or internal links, to make the site visible to AI search (ChatGPT, Claude, Perplexity), or to generate an llms.txt.
 ---
 
-# Technical SEO with RankForge
+# Technical SEO with Septune
 
-RankForge measures, you fix. Its tools crawl the real site and report each issue with
+Septune measures, you fix. Its tools crawl the real site and report each issue with
 evidence and the affected URLs. Work from that evidence: don't add issues it didn't report,
 and never promise rankings or citations, since nobody outside the search engines can.
 
@@ -17,7 +17,7 @@ and never promise rankings or citations, since nobody outside the search engines
    `maxPages` for a larger site. If robots.txt blocks the crawl and it's the user's own
    site, pass `ignoreRobots: true`.
 3. **Triage.** Start with critical and high impact. For each issue, tell the user in one
-   sentence what's wrong, on which pages, and the evidence RankForge gave.
+   sentence what's wrong, on which pages, and the evidence Septune gave.
 4. **Fix in the repository.**
    - When an issue has `deterministicFixAvailable`, call `get_fix_template` with its
      `ruleId` and the framework, then adapt the patch to the actual files.
@@ -39,5 +39,5 @@ and never promise rankings or citations, since nobody outside the search engines
   SoftwareApplication, BreadcrumbList, Organization).
 - Canonical URLs must be absolute and point at the final, indexable URL.
 - hreflang clusters must be reciprocal and include the page itself.
-- Core Web Vitals come from real Chrome users (`rankforge vitals <url>` with a
+- Core Web Vitals come from real Chrome users (`septune vitals <url>` with a
   `CRUX_API_KEY`). A site without enough traffic has no data: say so, don't estimate.

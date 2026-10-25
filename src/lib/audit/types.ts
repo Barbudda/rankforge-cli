@@ -43,6 +43,8 @@ export interface CrawledPage {
   lang: string | null;
   /** Content of <meta name="robots">, lowercased. */
   metaRobots: string | null;
+  /** Content of <meta name="googlebot">, lowercased: Google obeys it like robots. */
+  metaGooglebot?: string | null;
   /** Content of <meta name="viewport"> (mobile-friendly signal). */
   viewport: string | null;
   /** hreflang alternates declared in <head>. */

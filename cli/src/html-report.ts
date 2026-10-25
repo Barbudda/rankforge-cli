@@ -8,7 +8,7 @@ import type { GeoReport } from "@/lib/audit/geo";
  *
  * White-label: `--brand "Studio Name"` (with optional --brand-url and
  * --brand-color) puts the freelancer's or agency's name on the report and
- * removes every RankForge mention, so it can go straight to a client.
+ * removes every Septune mention, so it can go straight to a client.
  */
 
 const esc = (s: string) =>
@@ -46,7 +46,7 @@ export function renderHtmlReport(r: {
     .map((i) => {
       const urls = i.affectedUrls.slice(0, 8).map((u) => `<code>${esc(u.url)}</code>`).join(" ");
       const patch = r.fixable.includes(i.ruleId)
-        ? `<span class="tag patch">${r.brand ? "patch available" : `patch: rankforge fix ${esc(i.ruleId)}`}</span>`
+        ? `<span class="tag patch">${r.brand ? "patch available" : `patch: septune fix ${esc(i.ruleId)}`}</span>`
         : "";
       return `<li><div class="row"><span class="tag ${i.impact}">${i.impact}</span><strong>${esc(i.title)}</strong><span class="muted">(${i.affectedUrls.length})</span>${patch}</div><p>${esc(i.evidence ?? "")}</p>${urls ? `<p class="urls">${urls}</p>` : ""}</li>`;
     })
@@ -54,7 +54,7 @@ export function renderHtmlReport(r: {
   const geo = r.geo.checks
     .map(
       (c) =>
-        `<li><div class="row"><span class="tag ${c.status === "pass" ? "pass" : c.status === "warn" ? "medium" : "high"}">${c.status}</span><strong>${esc(c.title)}</strong></div><p>${esc(c.detail)}</p>${c.fix && !(r.brand && /rankforge/i.test(c.fix)) ? `<pre>${esc(c.fix)}</pre>` : ""}</li>`,
+        `<li><div class="row"><span class="tag ${c.status === "pass" ? "pass" : c.status === "warn" ? "medium" : "high"}">${c.status}</span><strong>${esc(c.title)}</strong></div><p>${esc(c.detail)}</p>${c.fix && !(r.brand && /septune/i.test(c.fix)) ? `<pre>${esc(c.fix)}</pre>` : ""}</li>`,
     )
     .join("");
   const bots = r.geo.bots
@@ -93,7 +93,7 @@ ${brand ? `<p class="prepared">Prepared by ${brandUrl ? `<a href="${esc(brandUrl
 <footer>${
     brand
       ? `Prepared by ${esc(brand)} on ${date}. Every finding is measured on the live site; no ranking outcome is promised.`
-      : `Made with <a href="https://github.com/Barbudda/rankforge-cli">rankforge-cli</a> v${esc(r.version)}. RankForge measures the technical layer your code controls; it never promises ranking outcomes.`
+      : `Made with <a href="https://github.com/Barbudda/septune">septune</a> v${esc(r.version)}. Septune measures the technical layer your code controls; it never promises ranking outcomes.`
   }</footer>
 </main></body></html>
 `;

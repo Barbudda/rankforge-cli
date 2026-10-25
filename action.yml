@@ -1,4 +1,4 @@
-name: "RankForge SEO & AI-search audit"
+name: "Septune SEO & AI-search audit"
 description: "Deterministic technical-SEO + AI-search (GEO) audit. Comments on the pull request and fails it when the preview breaks SEO compared with production. No AI, no API keys."
 author: "Barbudda"
 branding:
@@ -46,7 +46,7 @@ inputs:
     required: false
     default: ${{ github.token }}
   version:
-    description: "rankforge-cli version to run."
+    description: "septune version to run."
     required: false
     default: "0.3.0"
 
@@ -69,10 +69,10 @@ runs:
         RF_FAIL_ON: ${{ inputs['fail-on'] }}
         RF_PAGES: ${{ inputs.pages }}
         RF_FRAMEWORK: ${{ inputs.framework }}
-        RF_MD: ${{ runner.temp }}/rankforge-report.md
+        RF_MD: ${{ runner.temp }}/septune-report.md
       run: |
         status=0
-        npx --yes "rankforge-cli@${RF_VERSION}" diff "$RF_BASELINE" "$RF_URL" \
+        npx --yes "septune@${RF_VERSION}" diff "$RF_BASELINE" "$RF_URL" \
           --fail-on "$RF_FAIL_ON" --pages "$RF_PAGES" --framework "$RF_FRAMEWORK" \
           --markdown "$RF_MD" --no-color || status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -86,12 +86,12 @@ runs:
         RF_FRAMEWORK: ${{ inputs.framework }}
         RF_FAIL_UNDER: ${{ inputs['fail-under'] }}
         RF_REPORT: ${{ inputs.report }}
-        RF_MD: ${{ runner.temp }}/rankforge-report.md
+        RF_MD: ${{ runner.temp }}/septune-report.md
       run: |
         set -- audit "$RF_URL" --pages "$RF_PAGES" --framework "$RF_FRAMEWORK" --fail-under "$RF_FAIL_UNDER" --markdown "$RF_MD" --no-color
         if [ -n "$RF_REPORT" ]; then set -- "$@" --html "$RF_REPORT"; fi
         status=0
-        npx --yes "rankforge-cli@${RF_VERSION}" "$@" || status=$?
+        npx --yes "septune@${RF_VERSION}" "$@" || status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
     - name: AI-search readiness (GEO)
       id: geo
@@ -104,13 +104,13 @@ runs:
         RF_GEO_FAIL_UNDER: ${{ inputs['geo-fail-under'] }}
       run: |
         status=0
-        npx --yes "rankforge-cli@${RF_VERSION}" geo "$RF_URL" \
+        npx --yes "septune@${RF_VERSION}" geo "$RF_URL" \
           --pages "$RF_PAGES" --fail-under "$RF_GEO_FAIL_UNDER" --no-color || status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
     - name: Summary and pull-request comment
       shell: bash
       env:
-        RF_MD: ${{ runner.temp }}/rankforge-report.md
+        RF_MD: ${{ runner.temp }}/septune-report.md
         RF_COMMENT: ${{ inputs.comment }}
         RF_GITHUB_TOKEN: ${{ inputs['github-token'] }}
       run: |
@@ -124,7 +124,7 @@ runs:
         RF_GEO: ${{ steps.geo.outputs.status }}
       run: |
         failed=0
-        if [ "${RF_DIFF:-0}" != "0" ]; then echo "::error title=RankForge::This change breaks SEO compared with production. The pull-request comment and the job summary list what changed."; failed=1; fi
-        if [ "${RF_AUDIT:-0}" != "0" ]; then echo "::error title=RankForge::The technical-SEO audit failed (score below fail-under, or the site couldn't be reached)."; failed=1; fi
-        if [ "${RF_GEO:-0}" != "0" ]; then echo "::error title=RankForge::AI-search readiness is below geo-fail-under."; failed=1; fi
+        if [ "${RF_DIFF:-0}" != "0" ]; then echo "::error title=Septune::This change breaks SEO compared with production. The pull-request comment and the job summary list what changed."; failed=1; fi
+        if [ "${RF_AUDIT:-0}" != "0" ]; then echo "::error title=Septune::The technical-SEO audit failed (score below fail-under, or the site couldn't be reached)."; failed=1; fi
+        if [ "${RF_GEO:-0}" != "0" ]; then echo "::error title=Septune::AI-search readiness is below geo-fail-under."; failed=1; fi
         exit "$failed"

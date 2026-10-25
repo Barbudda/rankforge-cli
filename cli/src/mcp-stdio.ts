@@ -2,9 +2,9 @@ import { createInterface } from "node:readline";
 import { handleMessage } from "@/lib/mcp/server";
 
 /**
- * `rankforge mcp` — the RankForge agent as a LOCAL MCP server over stdio.
+ * `septune mcp` — the Septune agent as a LOCAL MCP server over stdio.
  *
- *   claude mcp add rankforge -- npx -y rankforge-cli mcp
+ *   claude mcp add septune -- npx -y septune mcp
  *
  * Newline-delimited JSON-RPC on stdin/stdout (MCP stdio transport). It runs on
  * the developer's machine, so it can audit http://localhost — no hosted
@@ -14,7 +14,7 @@ import { handleMessage } from "@/lib/mcp/server";
 export async function runStdioServer(): Promise<void> {
   const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
   const send = (msg: unknown) => process.stdout.write(JSON.stringify(msg) + "\n");
-  process.stderr.write("rankforge MCP server ready (stdio)\n");
+  process.stderr.write("septune MCP server ready (stdio)\n");
 
   // Requests are handled concurrently (an audit can take seconds) but each
   // response is written as a single atomic line.
@@ -38,7 +38,7 @@ export async function runStdioServer(): Promise<void> {
       }
       if (replies.length) send(Array.isArray(msg) ? replies : replies[0]);
     })().catch((e) => {
-      process.stderr.write(`rankforge mcp error: ${e instanceof Error ? e.message : String(e)}\n`);
+      process.stderr.write(`septune mcp error: ${e instanceof Error ? e.message : String(e)}\n`);
     });
     pending.add(job);
     void job.finally(() => pending.delete(job));

@@ -1,5 +1,5 @@
 /**
- * RAG corpus for the support chatbot — RankForge has no human support, so
+ * RAG corpus for the support chatbot — Septune has no human support, so
  * this assistant must be able to answer "plein de choses" accurately.
  *
  * The corpus is assembled from the SAME single sources of truth as the site
@@ -44,38 +44,38 @@ function buildChunks(): CorpusChunk[] {
   chunks.push(
     {
       id: "about",
-      title: "What RankForge does",
-      text: "RankForge checks a site's technical SEO at the three moments it breaks: in your editor before you push (the open-source CLI or the Claude Code plugin), on every pull request (a GitHub Action that compares the preview with production, comments the result and fails the check when pages would leave search), and in production (scheduled checks with email, Slack, Discord or webhook alerts). Measurements are deterministic and every finding cites its evidence. RankForge never writes to your repository and never promises Google rankings.",
+      title: "What Septune does",
+      text: "Septune checks a site's technical SEO at the three moments it breaks: in your editor before you push (the open-source CLI or the Claude Code plugin), on every pull request (a GitHub Action that compares the preview with production, comments the result and fails the check when pages would leave search), and in production (scheduled checks with email, Slack, Discord or webhook alerts). Measurements are deterministic and every finding cites its evidence. Septune never writes to your repository and never promises Google rankings.",
       url: "/",
     },
     {
       id: "how-it-works",
       title: "How it works (three checkpoints)",
-      text: "1) Before you push: run npx rankforge-cli audit http://localhost:3000, or install the Claude Code plugin (/plugin marketplace add Barbudda/rankforge-cli, then /plugin install rankforge@rankforge) so your assistant audits and fixes. 2) In the pull request: add the GitHub Action Barbudda/rankforge-cli with your preview URL and baseline-url set to production; it comments the changes on the pull request and fails it on critical regressions. 3) In production: sign up, add your site and turn on monitoring. 4) Fix from the evidence: every finding lists the affected URLs and likely files, and mechanical ones have a ready patch (rankforge fix <ruleId>).",
+      text: "1) Before you push: run npx septune audit http://localhost:3000, or install the Claude Code plugin (/plugin marketplace add Barbudda/septune, then /plugin install septune@septune) so your assistant audits and fixes. 2) In the pull request: add the GitHub Action Barbudda/septune with your preview URL and baseline-url set to production; it comments the changes on the pull request and fails it on critical regressions. 3) In production: sign up, add your site and turn on monitoring. 4) Fix from the evidence: every finding lists the affected URLs and likely files, and mechanical ones have a ready patch (septune fix <ruleId>).",
       url: "/#how-it-works",
     },
     {
       id: "security",
       title: "Security model",
-      text: "RankForge only reads rendered pages, like any crawler, and honours robots.txt. It never writes to your repository: fixes reach your code through your own pull requests. The CLI and the editor agent run on your machine and send nothing to RankForge; the GitHub Action uses the job's token only to comment on the pull request; hosted monitoring fetches your public pages. It never reads your source code or environment secrets, and every monitoring check is kept with what changed.",
+      text: "Septune only reads rendered pages, like any crawler, and honours robots.txt. It never writes to your repository: fixes reach your code through your own pull requests. The CLI and the editor agent run on your machine and send nothing to Septune; the GitHub Action uses the job's token only to comment on the pull request; hosted monitoring fetches your public pages. It never reads your source code or environment secrets, and every monitoring check is kept with what changed.",
       url: "/#security",
     },
     {
       id: "contact",
       title: "Contact & account deletion",
-      text: `RankForge support is self-serve through this assistant. For anything it can't answer, such as account deletion, GDPR requests (access, rectification, erasure), billing questions or enterprise/self-host discussions, email ${CONTACT} from your account address.`,
+      text: `Septune support is self-serve through this assistant. For anything it can't answer, such as account deletion, GDPR requests (access, rectification, erasure), billing questions or enterprise/self-host discussions, email ${CONTACT} from your account address.`,
       url: "/privacy",
     },
     {
       id: "privacy",
       title: "Privacy (what is stored)",
-      text: "RankForge stores: your email and a password hash (via Supabase Auth; the plain password is never seen); for each site, its name, the production URL you provide and the audits and issues generated for it; and with monitoring on, the alert address, the webhook URL and a record of each check, kept 3, 12 or 24 months depending on the plan. Processors: Supabase (database, sign-in), Vercel (hosting), Resend (alert emails), Anthropic (optional analysis), Google (the site URL, only when Core Web Vitals are on). No ad trackers, no data resale. Row-level security means each account only reads its own rows. Deletion on request by email.",
+      text: "Septune stores: your email and a password hash (via Supabase Auth; the plain password is never seen); for each site, its name, the production URL you provide and the audits and issues generated for it; and with monitoring on, the alert address, the webhook URL and a record of each check, kept 3, 12 or 24 months depending on the plan. Processors: Supabase (database, sign-in), Vercel (hosting), Stripe (payments; it holds card details, Septune keeps only the customer id and subscription status), Resend (alert emails), Anthropic (optional analysis), Google (the site URL, only when Core Web Vitals are on). No ad trackers, no data resale. Row-level security means each account only reads its own rows. Deletion on request by email.",
       url: "/privacy",
     },
     {
       id: "terms",
       title: "Terms (short version)",
-      text: "Use RankForge on sites you are authorized to audit. It reads public pages and never writes to your repositories; any change to your code is yours to make and merge. The product is in beta: billing isn't open, features may change, monitoring alerts are best effort, and you remain responsible for reviewing every change. No search-ranking outcomes are promised.",
+      text: "Use Septune on sites you are authorized to audit. It reads public pages and never writes to your repositories; any change to your code is yours to make and merge. The product is early-stage: paid plans can only be pre-ordered until payments open, features may change, monitoring alerts are best effort, and you remain responsible for reviewing every change. No search-ranking outcomes are promised.",
       url: "/terms",
     },
   );
@@ -85,9 +85,9 @@ function buildChunks(): CorpusChunk[] {
     id: "autonomy",
     title: "Modification levels",
     text:
-      "In the hosted app, each repository has a modification level that sets how far RankForge prepares a fix: " +
+      "In the hosted app, each repository has a modification level that sets how far Septune prepares a fix: " +
       AUTONOMY_LEVELS.map((l) => `${l.step}. ${l.label}: ${l.description}`).join(" ") +
-      " Prepared pull requests stay in RankForge for review: nothing is pushed to GitHub yet. To apply a fix today, use the patch or your AI editor.",
+      " Prepared pull requests stay in Septune for review: nothing is pushed to GitHub yet. To apply a fix today, use the patch or your AI editor.",
     url: "/#security",
   });
 
@@ -98,7 +98,7 @@ function buildChunks(): CorpusChunk[] {
       title: rule.title,
       text: `${rule.title} (category: ${rule.category}). ${rule.description} Default impact: ${rule.defaultImpact}, effort: ${rule.defaultEffort}, risk: ${rule.defaultRisk}. ${
         rule.canAutoFix
-          ? "RankForge prepares a patch for this class of issue, with what to adapt and how to verify it; you or your AI editor apply it."
+          ? "Septune prepares a patch for this class of issue, with what to adapt and how to verify it; you or your AI editor apply it."
           : "This class of issue is reported with affected pages and concrete guidance. It needs a human decision rather than an automatic patch."
       }${rule.frameworks?.length ? ` Tailored fixes exist for: ${rule.frameworks.join(", ")}.` : ""}`,
       url: `/docs/issues/${ruleSlug(rule.id)}`,
@@ -125,7 +125,7 @@ function buildChunks(): CorpusChunk[] {
   chunks.push({
     id: "tier:roadmap",
     title: "What's not available yet",
-    text: `Planned, not built yet: ${ROADMAP.join("; ")}. RankForge doesn't offer SSO, self-hosting or team seats today.`,
+    text: `Planned, not built yet: ${ROADMAP.join("; ")}. Septune doesn't offer SSO, self-hosting or team seats today.`,
     url: "/pricing",
   });
 
@@ -144,7 +144,7 @@ function buildChunks(): CorpusChunk[] {
     id: "changelog",
     title: "What's new (changelog)",
     text:
-      "What's new in RankForge: the latest release notes, recent updates and shipped features, newest first. " +
+      "What's new in Septune: the latest release notes, recent updates and shipped features, newest first. " +
       CHANGELOG.map((e) => `${e.date}, ${e.title}: ${e.notes.join(" ")}`).join(" | "),
     url: "/changelog",
   });

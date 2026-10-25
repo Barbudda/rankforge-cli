@@ -2,7 +2,7 @@ import type { AgentMode } from "@/types";
 
 /**
  * The modification-autonomy spectrum, ordered from least to most invasive.
- * The UI renders this ladder so a user can choose exactly how far RankForge
+ * The UI renders this ladder so a user can choose exactly how far Septune
  * is allowed to go on their site — from plain advice to full root autonomy.
  */
 export interface AutonomyLevel {
@@ -44,7 +44,7 @@ export const AUTONOMY_LEVELS: AutonomyLevel[] = [
     label: "Draft PRs",
     short: "Draft pull requests",
     description:
-      "Prepares a draft pull request in RankForge for each fix, for you to review and apply. Pushing to GitHub comes with the GitHub App, on the roadmap.",
+      "Prepares a draft pull request in Septune for each fix, for you to review and apply. Pushing to GitHub comes with the GitHub App, on the roadmap.",
     writes: true,
     risk: "low",
   },
@@ -54,7 +54,7 @@ export const AUTONOMY_LEVELS: AutonomyLevel[] = [
     label: "Auto · low-risk",
     short: "Auto-ready PRs",
     description:
-      "Prepares ready pull requests for low-risk fixes and drafts for the rest, in RankForge. Pushing to GitHub comes with the GitHub App.",
+      "Prepares ready pull requests for low-risk fixes and drafts for the rest, in Septune. Pushing to GitHub comes with the GitHub App.",
     writes: true,
     risk: "medium",
   },

@@ -1,5 +1,5 @@
 /**
- * RankForge domain model.
+ * Septune domain model.
  * Strict, framework-agnostic types shared across the audit engine,
  * the GitHub service, and the UI. The sample dataset (lib/sample)
  * produces values that satisfy exactly these shapes, so swapping in a
@@ -91,7 +91,7 @@ export interface Repository {
   connectedAt: string;
   /** Soft signal of detection confidence (0–100). */
   detectionConfidence: number;
-  /** How much autonomy RankForge has on this repo (overrides workspace default). */
+  /** How much autonomy Septune has on this repo (overrides workspace default). */
   agentLevel: AgentMode;
 }
 
@@ -218,7 +218,7 @@ export interface PullRequest {
 // ── Agent settings ──────────────────────────────────────────────
 
 /**
- * The autonomy spectrum: how far RankForge is allowed to go on a repo,
+ * The autonomy spectrum: how far Septune is allowed to go on a repo,
  * from plain advice up to full root-level autonomy. Ordered low → high.
  */
 export type AgentMode =

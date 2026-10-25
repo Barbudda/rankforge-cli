@@ -96,6 +96,7 @@ function parse(
   const lang = attr(htmlTag, "lang");
 
   const metaRobots = metaContent(html, "name", "robots")?.toLowerCase() ?? null;
+  const metaGooglebot = metaContent(html, "name", "googlebot")?.toLowerCase() ?? null;
   const viewport = metaContent(html, "name", "viewport");
   const twitterCard = metaContent(html, "name", "twitter:card");
 
@@ -210,6 +211,7 @@ function parse(
     renderMs,
     lang,
     metaRobots,
+    metaGooglebot,
     viewport,
     hreflang,
     og,
@@ -261,7 +263,7 @@ async function fetchPage(url: string): Promise<CrawledPage> {
     // redirect-following fetch in local dev.
     const res = await guardedFetch(url, {
       signal: ctrl.signal,
-      headers: { "user-agent": "RankForgeBot/1.0 (+https://www.rank-forge.dev/docs/agent)" },
+      headers: { "user-agent": "SeptuneBot/1.0 (+https://www.rank-forge.dev/docs/agent)" },
     });
     // TTFB proxy: time until response headers arrive (before body streaming).
     const ttfb = Date.now() - started;
@@ -348,7 +350,7 @@ export async function probeSiteFiles(
     try {
       const res = await guardedFetch(`${origin}${path}`, {
         signal: ctrl.signal,
-        headers: { "user-agent": "RankForgeBot/1.0 (+https://www.rank-forge.dev/docs/agent)" },
+        headers: { "user-agent": "SeptuneBot/1.0 (+https://www.rank-forge.dev/docs/agent)" },
       });
       const html = (res.headers.get("content-type") ?? "").includes("text/html");
       const finalUrl = res.url || `${origin}${path}`;
@@ -367,7 +369,7 @@ export async function probeSiteFiles(
   };
 
   // A path that cannot exist: a healthy site answers 404, not 200.
-  const notFoundProbe = `/rankforge-404-check-${Math.random().toString(36).slice(2, 10)}`;
+  const notFoundProbe = `/septune-404-check-${Math.random().toString(36).slice(2, 10)}`;
   const [robots, llms, tls, missing] = await Promise.all([
     get("/robots.txt", 100_000),
     get("/llms.txt", 16_000),
@@ -425,7 +427,7 @@ export interface CrawlOptions {
   hardCap?: number;
   /** Parallel fetches (polite default 4, max 8). */
   concurrency?: number;
-  /** robots.txt body: URLs it disallows for RankForgeBot are not fetched. */
+  /** robots.txt body: URLs it disallows for SeptuneBot are not fetched. */
   robotsTxt?: string;
   /**
    * Extra URLs crawled once the link frontier is exhausted: sitemap entries
@@ -438,7 +440,7 @@ export interface CrawlResult {
   pages: CrawledPage[];
   /** Every internally linked page was crawled (no cap or deadline cut). */
   complete: boolean;
-  /** Paths skipped because robots.txt disallows RankForgeBot there. */
+  /** Paths skipped because robots.txt disallows SeptuneBot there. */
   blockedByRobots: string[];
 }
 
@@ -447,7 +449,7 @@ const ASSET_RE = /\.(png|jpe?g|gif|svg|webp|avif|css|js|mjs|ico|pdf|zip|gz|xml|j
 /**
  * Crawl a site from `startUrl`, breadth-first over same-origin internal links,
  * then over the seeds (sitemap entries…) the links did not reach. Fetches run
- * in a small worker pool; robots.txt rules for RankForgeBot are honoured when
+ * in a small worker pool; robots.txt rules for SeptuneBot are honoured when
  * the body is passed in.
  *
  * Click depth is recomputed by the link graph, so the depth recorded here is
@@ -463,7 +465,7 @@ export async function crawlSite(startUrl: string, opts: CrawlOptions = {}): Prom
   const start = new URL(startUrl);
   const origin = start.origin;
   const robots = opts.robotsTxt ?? "";
-  const allowed = (u: URL) => !robots || botAllowed(robots, "RankForgeBot", u.pathname + u.search);
+  const allowed = (u: URL) => !robots || botAllowed(robots, "SeptuneBot", u.pathname + u.search);
 
   const blockedByRobots: string[] = [];
   if (!allowed(start)) return { pages: [], complete: true, blockedByRobots: [start.pathname] };
@@ -610,7 +612,7 @@ export async function scanSite(
     seeds,
   });
   if (res.pages.length === 0 && res.blockedByRobots.length) {
-    throw new Error("robots.txt disallows RankForgeBot on this URL. If it's your own site, audit it with robots.txt ignored.");
+    throw new Error("robots.txt disallows SeptuneBot on this URL. If it's your own site, audit it with robots.txt ignored.");
   }
   return { pages: res.pages, siteFiles: { ...siteFiles, crawlComplete: res.complete }, blockedByRobots: res.blockedByRobots };
 }

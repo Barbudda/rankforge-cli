@@ -3,7 +3,7 @@ import { MCP_TOOLS } from "./tools";
 /**
  * Transport-agnostic MCP (JSON-RPC 2.0) dispatcher — shared by the hosted
  * Streamable-HTTP route (src/app/api/mcp/route.ts) and the CLI's local stdio
- * server (`rankforge mcp`). One implementation, so both surfaces expose the
+ * server (`septune mcp`). One implementation, so both surfaces expose the
  * exact same tools and protocol behaviour.
  */
 
@@ -61,12 +61,12 @@ export async function handleMessage(raw: unknown): Promise<unknown | null> {
         protocolVersion: SUPPORTED_VERSIONS.has(requested) ? requested : PROTOCOL_VERSION,
         capabilities: { tools: {} },
         serverInfo: {
-          name: "rankforge",
-          title: "RankForge — technical SEO agent",
+          name: "septune",
+          title: "Septune — technical SEO agent",
           version: SERVER_VERSION,
         },
         instructions:
-          "RankForge measures technical SEO deterministically. Typical loop: audit_site on the dev/prod URL → fix the reported issues in this repository (get_fix_template gives idiomatic patches for mechanical ones) → re-run audit_site to verify. Use seo_docs to explain any issue to the user. Never promise search-ranking outcomes.",
+          "Septune measures technical SEO deterministically. Typical loop: audit_site on the dev/prod URL → fix the reported issues in this repository (get_fix_template gives idiomatic patches for mechanical ones) → re-run audit_site to verify. Use seo_docs to explain any issue to the user. Never promise search-ranking outcomes.",
       });
     }
     case "ping":

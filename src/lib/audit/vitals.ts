@@ -2,7 +2,7 @@
  * Core Web Vitals from real Chrome users, via Google's Chrome UX Report (CrUX)
  * API: p75 over the last 28 days. Free, but it needs a Google Cloud API key
  * (Chrome UX Report API enabled). Opt-in only: it sends the audited URL to
- * Google, and RankForge otherwise never calls a third party.
+ * Google, and Septune otherwise never calls a third party.
  *
  * The PageSpeed Insights API is deliberately not used: it has no keyless
  * quota left and Google is removing CrUX field data from it.

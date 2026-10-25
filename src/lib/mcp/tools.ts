@@ -13,10 +13,10 @@ import { CATEGORY_WEIGHTS } from "@/lib/seo/constants";
 import type { CategoryScore, SeoCategory } from "@/types";
 
 /**
- * The RankForge agent's MCP toolbox — what an AI coding assistant (Claude
+ * The Septune agent's MCP toolbox — what an AI coding assistant (Claude
  * Code, Cursor, VS Code, Windsurf…) can call from the developer's editor.
  *
- * Design: the tools do the MEASURING (RankForge's deterministic engine — no
+ * Design: the tools do the MEASURING (Septune's deterministic engine — no
  * LLM, no external API); the host agent does the REASONING and edits the repo
  * it already has open. That split is why this works so well: the assistant
  * gets ground truth about the rendered site, and fixes code in place.
@@ -80,7 +80,7 @@ function asUrl(v: unknown): string {
   return u.toString();
 }
 
-// The local stdio server (rankforge mcp) runs on the user's machine and can
+// The local stdio server (septune mcp) runs on the user's machine and can
 // crawl more; the hosted route keeps the historic 24-page ceiling.
 // Read at call time: the CLI sets RANKFORGE_ALLOW_LOCAL after imports run.
 const pageCap = () => (process.env.RANKFORGE_ALLOW_LOCAL === "1" ? 200 : 24);
@@ -114,7 +114,7 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: "audit_site",
     description:
-      "Run RankForge's full deterministic technical-SEO audit on a site (crawls up to `maxPages` pages breadth-first, probes robots/sitemap, measures image weights and link statuses, builds the internal link graph). Returns category scores (0-100), every detected issue with evidence and affected URLs, plus site signals: orphan pages, click depth, near-duplicate content clusters, and semantic internal-link suggestions. Works on localhost dev servers. No LLM involved — results are measured, not guessed.",
+      "Run Septune's full deterministic technical-SEO audit on a site (crawls up to `maxPages` pages breadth-first, probes robots/sitemap, measures image weights and link statuses, builds the internal link graph). Returns category scores (0-100), every detected issue with evidence and affected URLs, plus site signals: orphan pages, click depth, near-duplicate content clusters, and semantic internal-link suggestions. Works on localhost dev servers. No LLM involved — results are measured, not guessed.",
     inputSchema: {
       type: "object",
       required: ["url"],
@@ -122,7 +122,7 @@ export const MCP_TOOLS: McpTool[] = [
         url: { type: "string", description: "Start URL, e.g. http://localhost:3000/ or https://example.com/" },
         framework: { type: "string", enum: FRAMEWORKS, description: "Site framework (improves file hints). Default nextjs." },
         maxPages: { type: "integer", minimum: 1, maximum: 200, description: "Pages to crawl (default 25; the hosted server caps at 24)." },
-        ignoreRobots: { type: "boolean", description: "Crawl paths robots.txt disallows for RankForgeBot. Only for your own site." },
+        ignoreRobots: { type: "boolean", description: "Crawl paths robots.txt disallows for SeptuneBot. Only for your own site." },
       },
     },
     async handler(args) {
@@ -243,7 +243,7 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: "get_fix_template",
     description:
-      "Get RankForge's deterministic, framework-idiomatic patch (unified diff + PR title/description + validation steps) for a mechanical SEO issue. Use the ruleId from audit_site/audit_page results where deterministicFixAvailable=true. Adapt the diff to the actual files in this repository before applying.",
+      "Get Septune's deterministic, framework-idiomatic patch (unified diff + PR title/description + validation steps) for a mechanical SEO issue. Use the ruleId from audit_site/audit_page results where deterministicFixAvailable=true. Adapt the diff to the actual files in this repository before applying.",
     inputSchema: {
       type: "object",
       required: ["ruleId"],
@@ -285,7 +285,7 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: "seo_docs",
     description:
-      "Search RankForge's technical-SEO knowledge base (the same corpus behind rankforge docs): what each issue class means, why it matters, and how RankForge fixes it. Grounded, local retrieval — cite the returned urls when explaining to the user.",
+      "Search Septune's technical-SEO knowledge base (the same corpus behind septune docs): what each issue class means, why it matters, and how Septune fixes it. Grounded, local retrieval — cite the returned urls when explaining to the user.",
     inputSchema: {
       type: "object",
       required: ["question"],
@@ -343,7 +343,7 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: "list_rules",
     description:
-      "List RankForge's technical-SEO rule catalog: every issue the audit can report, under the same ruleId audit_site returns, with its category, default impact, whether get_fix_template has a patch for it, and its documentation URL when there is one.",
+      "List Septune's technical-SEO rule catalog: every issue the audit can report, under the same ruleId audit_site returns, with its category, default impact, whether get_fix_template has a patch for it, and its documentation URL when there is one.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
       return JSON.stringify(
