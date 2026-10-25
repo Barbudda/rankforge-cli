@@ -69,7 +69,7 @@ async function probeUrl(
         method: "HEAD",
         redirect: "manual",
         signal: ctrl.signal,
-        headers: { "user-agent": "RankForgeBot/1.0 (+https://rankforge.dev)" },
+        headers: { "user-agent": "RankForgeBot/1.0 (+https://www.rank-forge.dev/docs/agent)" },
       }).catch(() => null);
       if (!res || res.status === 405 || res.status === 501) {
         res = await fetch(current, {
@@ -77,7 +77,7 @@ async function probeUrl(
           redirect: "manual",
           signal: ctrl.signal,
           headers: {
-            "user-agent": "RankForgeBot/1.0 (+https://rankforge.dev)",
+            "user-agent": "RankForgeBot/1.0 (+https://www.rank-forge.dev/docs/agent)",
             range: "bytes=0-0",
           },
         }).catch(() => null);

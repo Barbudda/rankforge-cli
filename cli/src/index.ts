@@ -34,13 +34,13 @@ import { runStdioServer } from "./mcp-stdio";
  *   rankforge mcp                  local MCP server (stdio) for Claude Code / Cursor
  *   rankforge rules
  *
- * No AI, no API keys, no telemetry. The same engine that powers rankforge.dev.
+ * No AI, no API keys, no telemetry. The same engine that powers www.rank-forge.dev.
  * (The only outbound call to a third party is the opt-in --vitals / vitals,
  * which asks Google's CrUX API about the URL.)
  */
 
 const VERSION = "0.3.0";
-const APP_URL = "https://rank-forge-blue.vercel.app";
+const APP_URL = "https://www.rank-forge.dev";
 
 const FRAMEWORKS: Framework[] = ["nextjs", "nuxt", "astro", "sveltekit", "remix", "vite-react", "mdx", "static"];
 

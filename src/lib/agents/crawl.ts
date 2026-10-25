@@ -261,7 +261,7 @@ async function fetchPage(url: string): Promise<CrawledPage> {
     // redirect-following fetch in local dev.
     const res = await guardedFetch(url, {
       signal: ctrl.signal,
-      headers: { "user-agent": "RankForgeBot/1.0 (+https://rankforge.dev)" },
+      headers: { "user-agent": "RankForgeBot/1.0 (+https://www.rank-forge.dev/docs/agent)" },
     });
     // TTFB proxy: time until response headers arrive (before body streaming).
     const ttfb = Date.now() - started;
@@ -348,7 +348,7 @@ export async function probeSiteFiles(
     try {
       const res = await guardedFetch(`${origin}${path}`, {
         signal: ctrl.signal,
-        headers: { "user-agent": "RankForgeBot/1.0 (+https://rankforge.dev)" },
+        headers: { "user-agent": "RankForgeBot/1.0 (+https://www.rank-forge.dev/docs/agent)" },
       });
       const html = (res.headers.get("content-type") ?? "").includes("text/html");
       const finalUrl = res.url || `${origin}${path}`;
