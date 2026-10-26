@@ -34,13 +34,13 @@ import { runStdioServer } from "./mcp-stdio";
  *   septune mcp                  local MCP server (stdio) for Claude Code / Cursor
  *   septune rules
  *
- * No AI, no API keys, no telemetry. The same engine that powers www.rank-forge.dev.
+ * No AI, no API keys, no telemetry. The same engine that powers www.septune.dev.
  * (The only outbound call to a third party is the opt-in --vitals / vitals,
  * which asks Google's CrUX API about the URL.)
  */
 
 const VERSION = "0.3.0";
-const APP_URL = "https://www.rank-forge.dev";
+const APP_URL = "https://www.septune.dev";
 
 const FRAMEWORKS: Framework[] = ["nextjs", "nuxt", "astro", "sveltekit", "remix", "vite-react", "mdx", "static"];
 

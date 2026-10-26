@@ -244,17 +244,17 @@ Without the Action, in any CI: `npx septune diff "$PROD_URL" "$PREVIEW_URL"` exi
 
 ## 4. Hosted monitoring
 
-Your next deploy can still break production when nobody runs the CLI. The hosted app at **[www.rank-forge.dev](https://www.rank-forge.dev)** runs the same engine on your production site on a schedule, compares each check with the previous one, and alerts you when something critical changes: pages that start failing, a new `noindex`, robots.txt blocking Google, the sitemap gone, the HTTPS certificate about to expire, Core Web Vitals getting worse.
+Your next deploy can still break production when nobody runs the CLI. The hosted app at **[www.septune.dev](https://www.septune.dev)** runs the same engine on your production site on a schedule, compares each check with the previous one, and alerts you when something critical changes: pages that start failing, a new `noindex`, robots.txt blocking Google, the sitemap gone, the HTTPS certificate about to expire, Core Web Vitals getting worse.
 
 - **Free**: 1 site, checked weekly, email alerts.
 - **Pro**: 5 sites, checked daily, alerts by email, Slack, Discord or webhook.
 - **Studio**: 25 sites for freelancers and agencies, with an alert address per client.
 
-Pro and Studio open soon: [pre-order one](https://www.rank-forge.dev/pricing) and you'll get an email the day it does.
+Pro and Studio open soon: [pre-order one](https://www.septune.dev/pricing) and you'll get an email the day it does.
 
 The CLI, the editor agent and the GitHub Action stay free and open source.
 
-**No install at all?** [www.rank-forge.dev/audit](https://www.rank-forge.dev/audit) runs the engine on a few pages of any public URL, free, no signup.
+**No install at all?** [www.septune.dev/audit](https://www.septune.dev/audit) runs the engine on a few pages of any public URL, free, no signup.
 
 ---
 

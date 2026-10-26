@@ -1,5 +1,6 @@
 import type { CrawledPage } from "./types";
 import { assertUrlAllowed } from "@/lib/net/ssrf";
+import { SEPTUNE_BOT_UA } from "@/lib/net/user-agent";
 
 /**
  * Real resource analysis — the audit stops guessing and starts measuring.
@@ -69,7 +70,7 @@ async function probeUrl(
         method: "HEAD",
         redirect: "manual",
         signal: ctrl.signal,
-        headers: { "user-agent": "SeptuneBot/1.0 (+https://www.rank-forge.dev/docs/agent)" },
+        headers: { "user-agent": SEPTUNE_BOT_UA },
       }).catch(() => null);
       if (!res || res.status === 405 || res.status === 501) {
         res = await fetch(current, {
@@ -77,7 +78,7 @@ async function probeUrl(
           redirect: "manual",
           signal: ctrl.signal,
           headers: {
-            "user-agent": "SeptuneBot/1.0 (+https://www.rank-forge.dev/docs/agent)",
+            "user-agent": SEPTUNE_BOT_UA,
             range: "bytes=0-0",
           },
         }).catch(() => null);

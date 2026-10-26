@@ -1,5 +1,6 @@
 import { gunzipSync } from "node:zlib";
 import { guardedFetch } from "@/lib/net/ssrf";
+import { SEPTUNE_BOT_UA } from "@/lib/net/user-agent";
 
 /**
  * Sitemap reader. Follows the sitemaps a site actually declares (robots.txt
@@ -12,7 +13,6 @@ import { guardedFetch } from "@/lib/net/ssrf";
  * redirect, error, are noindex or canonicalise elsewhere).
  */
 
-const UA = "SeptuneBot/1.0 (+https://www.rank-forge.dev/docs/agent)";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 export interface SitemapScan {
@@ -65,7 +65,7 @@ async function readFile(url: string, deadline: number): Promise<{ ok: true; text
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), Math.max(1000, Math.min(10_000, deadline - Date.now())));
   try {
-    const res = await guardedFetch(url, { signal: ctrl.signal, headers: { "user-agent": UA } });
+    const res = await guardedFetch(url, { signal: ctrl.signal, headers: { "user-agent": SEPTUNE_BOT_UA } });
     if (!res.ok) {
       res.body?.cancel().catch(() => {});
       return { ok: false, reason: `HTTP ${res.status}` };
