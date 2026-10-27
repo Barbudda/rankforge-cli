@@ -663,5 +663,61 @@ export function runIndexingChecks(input: IndexingCheckInput): EngineIssue[] {
     canAutoFix: false,
   });
 
+  // ══ Sitemap files search engines can't read ═══════════════════════
+  // A site with no sitemap at all is "framework-sitemap-missing"; this is about
+  // sitemaps that are declared, or listed by an index, and still unreadable.
+  const sitemapErrors = siteFiles?.sitemapErrors ?? [];
+  if (sitemapErrors.length && (siteFiles?.hasSitemap || siteFiles?.robotsDeclaresSitemap)) {
+    push({
+      ruleId: "indexing-sitemap-format",
+      category: "indexing",
+      title: "Sitemap files that can't be read",
+      description:
+        "Search engines skip a sitemap they can't fetch or parse, so the pages only it lists may never be discovered. Each file must answer 200 with XML whose root is <urlset> or <sitemapindex>.",
+      impact: "high",
+      effort: "low",
+      risk: "low",
+      confidence: 90,
+      evidence: `${sitemapErrors.length} sitemap file${sitemapErrors.length === 1 ? "" : "s"} couldn't be read: ${joinNotes(sitemapErrors.slice(0, 3).map((e) => `${norm(e.file)} (${e.reason})`))}.`,
+      affectedUrls: sitemapErrors.slice(0, 20).map((e) => ({ url: norm(e.file), note: e.reason })),
+      files: [{ path: hints.sitemap, reason: "Serve the sitemap from a route or static file that returns XML.", confidence: 60 }],
+      canAutoFix: false,
+    });
+  }
+
+  // ══ URL shape ═════════════════════════════════════════════════════
+  const shaped = ok
+    .filter(indexable)
+    .map((p) => {
+      let u: URL;
+      try {
+        u = new URL(p.url);
+      } catch {
+        return null;
+      }
+      const why: string[] = [];
+      if (u.pathname.includes("_")) why.push("underscore in the path (Google reads it as joining words)");
+      const params = [...u.searchParams.keys()].length;
+      if (params > 2) why.push(`${params} query parameters`);
+      if (p.url.length > 200) why.push(`${p.url.length} characters long`);
+      return why.length ? { p, why } : null;
+    })
+    .filter((x): x is { p: CrawledPage; why: string[] } => x !== null);
+  push({
+    ruleId: "structure-url-format",
+    category: "structure",
+    title: "URLs that are hard to read or share",
+    description:
+      "Short, hyphenated URLs are easier for people to read and for search engines to split into words. Underscores join words together for Google, many query parameters create near-duplicate URLs, and very long URLs get cut off when shared. Change them only on new pages, or with a permanent redirect.",
+    impact: "low",
+    effort: "medium",
+    risk: "medium",
+    confidence: 85,
+    evidence: `${shaped.length} indexable page${shaped.length === 1 ? "" : "s"} have a URL worth reshaping.`,
+    affectedUrls: shaped.slice(0, 40).map(({ p, why }) => ({ url: norm(p.url), note: why.join(", ") })),
+    files: [{ path: hints.page, reason: "Rename the route, and redirect the old URL permanently.", confidence: 40 }],
+    canAutoFix: false,
+  });
+
   return issues;
 }

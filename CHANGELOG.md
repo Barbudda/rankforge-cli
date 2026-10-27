@@ -19,6 +19,7 @@
 - Orphan detection counts pages only the sitemap lists.
 - The crawl follows the site where it lands: auditing `example.com` when it redirects to `www.example.com` (or `http` to `https`) used to read a single page and score 100.
 - Seven checks from the usual site-audit error list: the `www` and bare domain both serving the site, an `http://` homepage that doesn't redirect to HTTPS, robots.txt lines crawlers can't read (typos, `Noindex`), pages with several canonical tags, meta refresh redirects, a viewport without `width`, and malformed link URLs.
+- Five more, measured: images that fail to load, the site's own CSS and JavaScript files that fail to load, internal links through temporary (302/307) redirects (a sign-in wall excepted), sitemap files that can't be read, and URLs with underscores, more than two parameters or over 200 characters.
 
 **Real-user data**
 - **`septune vitals <url>`** and `--vitals`: Core Web Vitals (LCP, INP, CLS, FCP, TTFB, p75) from Google's Chrome UX Report, for the page or the whole origin. Needs a free `CRUX_API_KEY`. It is the only call Septune makes to a third party, and only when you ask for it.
@@ -31,7 +32,7 @@
 **Editors and reports**
 - **Claude Code plugin**: `/plugin marketplace add Barbudda/septune`, then `/plugin install septune@septune`. Adds the MCP tools and the `/septune:seo` and `/septune:check` skills.
 - New MCP tool **`compare_sites`**: production vs local or preview, from your editor. `audit_site` takes `ignoreRobots`, and the local server crawls up to 200 pages.
-- `septune rules` and `list_rules` now list the 62 checks under the same `ruleId`s audits return (the old catalog used different ids). A test keeps the catalog in sync with the engine.
+- `septune rules` and `list_rules` now list the 67 checks under the same `ruleId`s audits return (the old catalog used different ids). A test keeps the catalog in sync with the engine.
 - White-label HTML reports: `--brand`, `--brand-url`, `--brand-color`. A branded report doesn't mention Septune.
 - `septune fix` prints the patch's notes (what to adapt per page) under the diff.
 

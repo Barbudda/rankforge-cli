@@ -19,6 +19,8 @@ export interface Probe {
   status: number;
   /** Redirect hops followed (0 = direct). */
   redirects: number;
+  /** Status code of each redirect followed, in order (e.g. [302]); empty when direct. */
+  hops: number[];
   /** Final URL after redirects. */
   finalUrl: string;
   /** Content-Length in bytes when the server reports it, else null. */
@@ -34,11 +36,14 @@ export interface ResourceReport {
   images: Map<string, Probe>;
   /** Probe by resolved absolute link URL. */
   links: Map<string, Probe>;
+  /** Probe by resolved absolute URL of the site's own stylesheets and scripts. */
+  assets: Map<string, Probe>;
 }
 
 const DEFAULTS = {
   maxImages: 48,
   maxLinks: 64,
+  maxAssets: 32,
   concurrency: 8,
   timeoutMs: 7000,
   maxHops: 5,
@@ -53,6 +58,7 @@ async function probeUrl(
 ): Promise<Probe> {
   let current = rawUrl;
   let redirects = 0;
+  const hops: number[] = [];
   let insecure = fromHttps && rawUrl.startsWith("http://");
 
   // One deadline for the ENTIRE redirect chain, not per hop — a slow chain of
@@ -83,7 +89,7 @@ async function probeUrl(
           },
         }).catch(() => null);
       }
-      if (!res) return { url: rawUrl, status: 0, redirects, finalUrl: current, bytes: null, contentType: "", insecure };
+      if (!res) return { url: rawUrl, status: 0, redirects, hops, finalUrl: current, bytes: null, contentType: "", insecure };
 
       // We only need headers — release any body so sockets don't leak across
       // the ~100 probes per audit (undici keeps the connection open otherwise).
@@ -93,12 +99,13 @@ async function probeUrl(
       if (res.status >= 300 && res.status < 400) {
         const loc = res.headers.get("location");
         if (!loc || hop === maxHops) {
-          return { url: rawUrl, status: res.status, redirects, finalUrl: current, bytes: null, contentType: "", insecure };
+          return { url: rawUrl, status: res.status, redirects, hops, finalUrl: current, bytes: null, contentType: "", insecure };
         }
         const next = new URL(loc, current).toString();
         if (next.startsWith("http://")) insecure = insecure || fromHttps;
         current = next;
         redirects++;
+        hops.push(res.status);
         continue;
       }
 
@@ -117,16 +124,17 @@ async function probeUrl(
         url: rawUrl,
         status: res.status,
         redirects,
+        hops,
         finalUrl: current,
         bytes: Number.isFinite(bytes as number) ? bytes : null,
         contentType: (res.headers.get("content-type") ?? "").toLowerCase(),
         insecure,
       };
     } catch {
-      return { url: rawUrl, status: 0, redirects, finalUrl: current, bytes: null, contentType: "", insecure };
+      return { url: rawUrl, status: 0, redirects, hops, finalUrl: current, bytes: null, contentType: "", insecure };
     }
   }
-  return { url: rawUrl, status: 0, redirects, finalUrl: current, bytes: null, contentType: "", insecure };
+  return { url: rawUrl, status: 0, redirects, hops, finalUrl: current, bytes: null, contentType: "", insecure };
   } finally {
     clearTimeout(timer);
   }
@@ -212,14 +220,49 @@ export async function probeResources(
     if (linkUrls.size >= cfg.maxLinks) break;
   }
 
+  // The site's own stylesheets and scripts: a missing one breaks the page's
+  // look or behaviour for crawlers that render it. Third-party ones aren't the
+  // site's to fix, so only same-host files count.
+  const assetUrls = new Map<string, boolean>();
+  for (const p of okPages) {
+    const fromHttps = p.url.startsWith("https://");
+    let host = "";
+    try {
+      host = new URL(p.url).host;
+    } catch {
+      continue;
+    }
+    const refs = [
+      ...[...p.html.matchAll(/<link\b[^>]*\brel=["']?stylesheet\b[^>]*>/gi)].map((m) => m[0].match(/\bhref=["']([^"']+)["']/i)?.[1]),
+      ...[...p.html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].map((m) => m[1]),
+    ];
+    for (const ref of refs) {
+      if (!ref) continue;
+      const abs = resolve(ref, p.url);
+      if (!abs) continue;
+      try {
+        if (new URL(abs).host !== host) continue;
+      } catch {
+        continue;
+      }
+      if (!assetUrls.has(abs)) assetUrls.set(abs, fromHttps);
+      if (assetUrls.size >= cfg.maxAssets) break;
+    }
+    if (assetUrls.size >= cfg.maxAssets) break;
+  }
+
   const imgEntries = [...imgUrls.entries()];
   const linkEntries = [...linkUrls.entries()];
+  const assetEntries = [...assetUrls.entries()];
 
-  const [imgProbes, linkProbes] = await Promise.all([
+  const [imgProbes, linkProbes, assetProbes] = await Promise.all([
     mapLimit(imgEntries, cfg.concurrency, ([url, fromHttps]) =>
       probeUrl(url, fromHttps, cfg.timeoutMs, cfg.maxHops),
     ),
     mapLimit(linkEntries, cfg.concurrency, ([url, fromHttps]) =>
+      probeUrl(url, fromHttps, cfg.timeoutMs, cfg.maxHops),
+    ),
+    mapLimit(assetEntries, cfg.concurrency, ([url, fromHttps]) =>
       probeUrl(url, fromHttps, cfg.timeoutMs, cfg.maxHops),
     ),
   ]);
@@ -228,6 +271,8 @@ export async function probeResources(
   imgEntries.forEach(([url], i) => images.set(url, imgProbes[i]!));
   const links = new Map<string, Probe>();
   linkEntries.forEach(([url], i) => links.set(url, linkProbes[i]!));
+  const assets = new Map<string, Probe>();
+  assetEntries.forEach(([url], i) => assets.set(url, assetProbes[i]!));
 
-  return { images, links };
+  return { images, links, assets };
 }

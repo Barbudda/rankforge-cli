@@ -33,6 +33,8 @@ export interface SiteFilesInput {
   sitemapFiles?: string[];
   /** The sitemap scan hit a cap, so "missing from sitemap" can't be judged. */
   sitemapTruncated?: boolean;
+  /** Sitemap files that couldn't be read as sitemaps, and why. */
+  sitemapErrors?: { file: string; reason: string }[];
   /** HTTP status returned for a path that cannot exist (soft-404 probe). */
   notFoundStatus?: number;
   /** The probe path used for notFoundStatus. */
@@ -1085,6 +1087,79 @@ export function runDeterministicAudit(
       evidence: `${mixed.size} http:// sub-resources referenced from https pages (measured).`,
       affectedUrls: [...mixed].slice(0, 40).map((url) => ({ url })),
       files: [],
+      canAutoFix: false,
+    });
+
+    // Only definitive answers count: a timeout (status 0) may be the network.
+    const broken = (pr: { status: number }) => pr.status >= 400;
+    const brokenImages = [...resources.images.values()].filter(broken);
+    push({
+      ruleId: "img-broken",
+      category: "images",
+      title: "Images that fail to load",
+      description:
+        "These images answer with an error, so visitors see a broken icon and image search drops them. Fix the path, restore the file, or remove the <img>.",
+      impact: "high",
+      effort: "low",
+      risk: "low",
+      confidence: 95,
+      evidence: `${brokenImages.length} referenced image${brokenImages.length === 1 ? "" : "s"} return an HTTP error (measured).`,
+      affectedUrls: brokenImages.slice(0, 40).map((pr) => ({ url: norm(pr.url), note: `HTTP ${pr.status}` })),
+      files: [{ path: fileHint(fw, "page"), reason: "Fix the src where the image is used, or the file in the static folder.", confidence: 50 }],
+      canAutoFix: false,
+    });
+
+    const brokenAssets = [...(resources.assets?.values() ?? [])].filter(broken);
+    push({
+      ruleId: "perf-broken-assets",
+      category: "performance",
+      title: "Stylesheets or scripts that fail to load",
+      description:
+        "The page asks for CSS or JavaScript files of your own site that answer with an error. Google renders the page without them, so layout or content that depends on them can be missing from what it indexes. Usually a stale build path after a deploy.",
+      impact: "high",
+      effort: "low",
+      risk: "low",
+      confidence: 90,
+      evidence: `${brokenAssets.length} same-site CSS/JS file${brokenAssets.length === 1 ? "" : "s"} return an HTTP error (measured).`,
+      affectedUrls: brokenAssets.slice(0, 40).map((pr) => ({ url: norm(pr.url), note: `HTTP ${pr.status}` })),
+      files: [{ path: fileHint(fw, "layout"), reason: "Check the asset paths in the layout and that the build output was deployed in full.", confidence: 45 }],
+      canAutoFix: false,
+    });
+
+    // Internal links answered with a 302/307: fine for a login wall, wrong for
+    // a page that moved for good, whose ranking signals then don't follow it.
+    const siteHost = (() => {
+      try {
+        return new URL(pages[0]?.url ?? startUrl).hostname.replace(/^www\./, "");
+      } catch {
+        return "";
+      }
+    })();
+    const temporary = [...resources.links.entries()].filter(([url, pr]) => {
+      if (!pr.hops?.some((h) => h === 302 || h === 307)) return false;
+      try {
+        // A sign-in wall (/dashboard → /login) is a legitimate temporary redirect.
+        return new URL(url).hostname.replace(/^www\./, "") === siteHost && !isUtilityPath(new URL(pr.finalUrl).pathname);
+      } catch {
+        return false;
+      }
+    });
+    push({
+      ruleId: "indexing-temporary-redirect",
+      category: "indexing",
+      title: "Internal links through temporary redirects",
+      description:
+        "These links land on a 302 or 307 redirect. For a page that moved for good, search engines keep the old URL and its signals don't fully pass to the new one. Use a permanent 301 or 308, or link straight to the final URL. A temporary redirect is right only when the page will come back, like a sign-in wall.",
+      impact: "low",
+      effort: "low",
+      risk: "low",
+      confidence: 85,
+      evidence: `${temporary.length} internal link${temporary.length === 1 ? "" : "s"} answer with a temporary redirect (measured).`,
+      affectedUrls: temporary.slice(0, 40).map(([url, pr]) => ({
+        url: norm(url),
+        note: `${pr.hops.join(" → ")} → ${norm(pr.finalUrl)}`,
+      })),
+      files: [{ path: fileHint(fw, "config"), reason: "Declare moved pages as permanent redirects in the framework's redirects config.", confidence: 50 }],
       canAutoFix: false,
     });
   }

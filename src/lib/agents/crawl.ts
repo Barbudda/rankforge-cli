@@ -322,6 +322,8 @@ export interface SiteFiles {
   sitemapFiles?: string[];
   /** A cap cut the sitemap scan short (very large sitemaps). */
   sitemapTruncated?: boolean;
+  /** Sitemap files that couldn't be read as sitemaps, and why. */
+  sitemapErrors?: { file: string; reason: string }[];
   /** HTTPS certificate of the start URL's host; null on http:// or when unreachable. */
   tls?: TlsInfo | null;
   /** The other host spelling (www / bare) and the http:// homepage: where they land. */
@@ -468,6 +470,7 @@ export async function probeSiteFiles(
     sitemapUrls: sitemap?.urls ?? [],
     sitemapFiles: sitemap?.files ?? [],
     sitemapTruncated: sitemap?.truncated ?? false,
+    sitemapErrors: sitemap?.errors ?? [],
     tls,
     hostVariants,
   };

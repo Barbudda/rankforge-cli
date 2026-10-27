@@ -47,9 +47,11 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "indexing-hreflang-invalid", category: "indexing", impact: "high", title: "hreflang annotations Google will ignore" },
   { id: "indexing-duplicate-content", category: "indexing", impact: "high", title: "Near-duplicate page content" },
   { id: "indexing-redirect-chain", category: "indexing", impact: "low", title: "Links through redirect chains" },
+  { id: "indexing-temporary-redirect", category: "indexing", impact: "low", title: "Internal links through temporary redirects" },
   { id: "indexing-html-lang-missing", category: "indexing", impact: "low", title: "Missing <html lang> attribute" },
   { id: "indexing-sitemap-hygiene", category: "indexing", impact: "medium", title: "Sitemap lists URLs that shouldn't be indexed" },
   { id: "indexing-sitemap-gaps", category: "indexing", impact: "low", title: "Indexable pages missing from the sitemap", doc: "indexing-sitemap-incomplete" },
+  { id: "indexing-sitemap-format", category: "indexing", impact: "high", title: "Sitemap files that can't be read" },
   { id: "indexing-https-certificate", category: "indexing", impact: "high", title: "HTTPS certificate expired, untrusted or expiring soon" },
   { id: "indexing-host-duplicate", category: "indexing", impact: "high", title: "www and non-www both serve the site" },
   { id: "indexing-http-not-redirected", category: "indexing", impact: "high", title: "The http:// version doesn't redirect to https://" },
@@ -59,6 +61,7 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "structure-h1-multiple", category: "structure", impact: "low", title: "Pages with multiple <h1> elements", doc: "structure-h1-multiple" },
   { id: "structure-heading-skip", category: "structure", impact: "low", title: "Heading levels skip a rank", doc: "structure-headings-skipped" },
   { id: "structure-thin-content", category: "structure", impact: "medium", title: "Thin-content pages" },
+  { id: "structure-url-format", category: "structure", impact: "low", title: "URLs that are hard to read or share" },
   { id: "content-readability", category: "structure", impact: "low", title: "Hard-to-read content" },
   { id: "content-keyword-stuffing", category: "structure", impact: "medium", title: "Possible keyword stuffing" },
 
@@ -67,6 +70,7 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "img-dimensions-missing", category: "images", impact: "medium", title: "Images without width/height (layout shift)" },
   { id: "img-lazy-missing", category: "images", impact: "low", title: "Image-heavy pages without lazy loading" },
   { id: "img-legacy-format", category: "images", impact: "medium", title: "Large images in legacy formats" },
+  { id: "img-broken", category: "images", impact: "high", title: "Images that fail to load" },
 
   // structured data
   { id: "schema-missing", category: "schema", impact: "medium", title: "Pages without structured data" },
@@ -89,6 +93,7 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "perf-oversized-images", category: "performance", impact: "medium", title: "Oversized images" },
   { id: "perf-heavy-html", category: "performance", impact: "low", title: "Very large HTML documents" },
   { id: "perf-mixed-content", category: "performance", impact: "high", title: "Insecure (http) resources on a secure page" },
+  { id: "perf-broken-assets", category: "performance", impact: "high", title: "Stylesheets or scripts that fail to load" },
   { id: "perf-viewport-missing", category: "performance", impact: "high", title: "Missing mobile viewport meta" },
   { id: "perf-viewport-no-width", category: "performance", impact: "medium", title: "Viewport meta without a width" },
 
