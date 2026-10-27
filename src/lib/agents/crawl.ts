@@ -447,6 +447,12 @@ export interface CrawlResult {
 
 const ASSET_RE = /\.(png|jpe?g|gif|svg|webp|avif|css|js|mjs|ico|pdf|zip|gz|xml|json|txt|woff2?|ttf|mp4|webm|mp3)$/i;
 
+/** example.com and www.example.com are one site; example.org is not. */
+function sameSite(a: string, b: string): boolean {
+  const bare = (h: string) => h.toLowerCase().replace(/^www\./, "");
+  return bare(a) === bare(b);
+}
+
 /**
  * Crawl a site from `startUrl`, breadth-first over same-origin internal links,
  * then over the seeds (sitemap entries…) the links did not reach. Fetches run
@@ -464,7 +470,7 @@ export async function crawlSite(startUrl: string, opts: CrawlOptions = {}): Prom
   // maxDuration (each page can take up to FETCH_TIMEOUT_MS on its own).
   const deadline = Date.now() + Math.max(10_000, opts.deadlineMs ?? 90_000);
   const start = new URL(startUrl);
-  const origin = start.origin;
+  let origin = start.origin;
   const robots = opts.robotsTxt ?? "";
   const allowed = (u: URL) => !robots || botAllowed(robots, "SeptuneBot", u.pathname + u.search);
 
@@ -500,7 +506,12 @@ export async function crawlSite(startUrl: string, opts: CrawlOptions = {}): Prom
   first.discoveredVia = "link";
   const pages = [first];
   try {
-    seen.add(new URL(first.url).pathname);
+    const landed = new URL(first.url);
+    seen.add(landed.pathname);
+    // The bare domain redirected to www (or http to https): crawl where the
+    // site actually lives, or every internal link looks off-site and the audit
+    // stops at one page with a perfect score.
+    if (landed.origin !== origin && sameSite(landed.hostname, start.hostname)) origin = landed.origin;
   } catch {
     /* keep */
   }
