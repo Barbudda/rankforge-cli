@@ -463,5 +463,205 @@ export function runIndexingChecks(input: IndexingCheckInput): EngineIssue[] {
     }
   }
 
+  // ══ One site, one address: www / bare, http / https ═══════════════
+  const site = (() => {
+    try {
+      return new URL(siteOrigin);
+    } catch {
+      return null;
+    }
+  })();
+  for (const v of siteFiles?.hostVariants ?? []) {
+    // A spelling that doesn't resolve or errors duplicates nothing.
+    if (!site || v.status < 200 || v.status >= 300) continue;
+    let landed: URL;
+    try {
+      landed = new URL(v.finalUrl || v.url);
+    } catch {
+      continue;
+    }
+    const canonicalHome = (() => {
+      try {
+        return v.canonical ? new URL(v.canonical, landed).host === site.host : false;
+      } catch {
+        return false;
+      }
+    })();
+    if (v.kind === "host" && landed.hostname !== site.hostname && !canonicalHome) {
+      push({
+        ruleId: "indexing-host-duplicate",
+        category: "indexing",
+        title: `${landed.hostname} and ${site.hostname} both serve the site`,
+        description:
+          "Your homepage answers on both spellings of the domain without one redirecting to the other, so search engines can index two copies and split their signals between them. Redirect the spare spelling to the real one with a permanent (301 or 308) redirect.",
+        impact: "high",
+        effort: "low",
+        risk: "low",
+        confidence: 90,
+        evidence: `GET ${v.url} answered ${v.status} on ${landed.host}, with no redirect to ${site.host}${v.canonical ? ` (canonical: ${v.canonical})` : " and no canonical"}.`,
+        affectedUrls: [{ url: v.url, note: `serves the site instead of redirecting to ${site.host}` }],
+        files: [{ path: "-", reason: "Domain redirects live in the host's domain settings (Vercel, Netlify, Cloudflare…).", confidence: 40 }],
+        canAutoFix: false,
+      });
+    }
+    if (v.kind === "http" && landed.protocol === "http:" && !canonicalHome) {
+      push({
+        ruleId: "indexing-http-not-redirected",
+        category: "indexing",
+        title: "The http:// version doesn't redirect to https://",
+        description:
+          "Your homepage still answers over plain HTTP instead of redirecting to HTTPS. Visitors who type the address land on an unencrypted page, and search engines may index both versions. Redirect every http:// URL to its https:// twin.",
+        impact: "high",
+        effort: "low",
+        risk: "low",
+        confidence: 90,
+        evidence: `GET ${v.url} answered ${v.status} over HTTP (landed on ${landed.href}).`,
+        affectedUrls: [{ url: v.url, note: "served over HTTP" }],
+        files: [{ path: "-", reason: "Force HTTPS in the host's settings, or with a redirect rule in front of the app.", confidence: 40 }],
+        canAutoFix: false,
+      });
+    }
+  }
+
+  // ══ robots.txt lines crawlers can't read ══════════════════════════
+  if (robots) {
+    const KNOWN = new Set(["user-agent", "allow", "disallow", "sitemap", "crawl-delay", "host", "clean-param", "request-rate", "visit-time"]);
+    const bad: string[] = [];
+    robots.split(/\r?\n/).forEach((raw, i) => {
+      const line = raw.replace(/#.*$/, "").trim();
+      if (!line) return;
+      const colon = line.indexOf(":");
+      const name = colon > 0 ? line.slice(0, colon).trim().toLowerCase() : "";
+      if (!name) bad.push(`line ${i + 1}: "${line.slice(0, 60)}" has no directive`);
+      else if (name === "noindex") bad.push(`line ${i + 1}: Noindex isn't supported in robots.txt (Google ignores it since 2019)`);
+      else if (!KNOWN.has(name)) bad.push(`line ${i + 1}: unknown directive "${line.slice(0, colon).trim()}"`);
+    });
+    if (bad.length) {
+      push({
+        ruleId: "indexing-robots-format",
+        category: "indexing",
+        title: "robots.txt has lines crawlers can't read",
+        description:
+          "Crawlers skip any robots.txt line they don't understand, so a misspelled Disallow simply isn't applied and the page stays crawlable. Fix or remove these lines.",
+        impact: "medium",
+        effort: "low",
+        risk: "low",
+        confidence: 90,
+        evidence: `${bad.length} unreadable line${bad.length === 1 ? "" : "s"}: ${joinNotes(bad.slice(0, 3))}.`,
+        affectedUrls: [{ url: "/robots.txt", note: bad.slice(0, 3).join("; ") }],
+        files: [{ path: hints.robots, reason: "Correct the directive names (User-agent, Allow, Disallow, Sitemap).", confidence: 70 }],
+        canAutoFix: false,
+      });
+    }
+  }
+
+  // ══ Head tags read once per page ══════════════════════════════════
+  const headOf = (html: string) => {
+    const end = html.search(/<\/head>/i);
+    return end > 0 ? html.slice(0, end) : html.slice(0, 200_000);
+  };
+
+  const multiCanonical = ok
+    .map((p) => {
+      const tags = [...headOf(p.html).matchAll(/<link\b[^>]*\brel=["']?canonical\b[^>]*>/gi)].map((m) => m[0]);
+      const hrefs = [...new Set(tags.map((t) => t.match(/\bhref=["']([^"']*)["']/i)?.[1] ?? ""))];
+      return { p, count: tags.length, hrefs };
+    })
+    .filter((x) => x.count > 1);
+  push({
+    ruleId: "indexing-canonical-multiple",
+    category: "indexing",
+    title: "Pages with more than one canonical tag",
+    description:
+      "When a page declares several canonical URLs, Google ignores all of them and picks one itself. Keep exactly one canonical per page; two usually means a plugin or a layout adds its own next to the page's.",
+    impact: "high",
+    effort: "low",
+    risk: "low",
+    confidence: 95,
+    evidence: `${multiCanonical.length} page${multiCanonical.length === 1 ? "" : "s"} declare more than one canonical.`,
+    affectedUrls: multiCanonical.map(({ p, count, hrefs }) => ({
+      url: norm(p.url),
+      note: `${count} canonical tags${hrefs.length > 1 ? `: ${hrefs.slice(0, 3).join(", ")}` : " (same URL repeated)"}`,
+    })),
+    files: [{ path: hints.layout, reason: "Find where the second canonical comes from: a shared layout, a plugin or the page itself.", confidence: 55 }],
+    canAutoFix: false,
+  });
+
+  const refreshes = ok
+    .map((p) => ({ p, tag: headOf(p.html).match(/<meta\b[^>]*http-equiv=["']?refresh["']?[^>]*>/i)?.[0] }))
+    .filter((x): x is { p: CrawledPage; tag: string } => Boolean(x.tag));
+  push({
+    ruleId: "indexing-meta-refresh",
+    category: "indexing",
+    title: "Pages that redirect with a meta refresh",
+    description:
+      "A meta refresh reloads or redirects the page from the browser. Google may treat it as a redirect it can't trust, and it breaks the back button. Use a real 301 or 308 redirect from the server instead.",
+    impact: "medium",
+    effort: "low",
+    risk: "low",
+    confidence: 95,
+    evidence: `${refreshes.length} page${refreshes.length === 1 ? "" : "s"} carry <meta http-equiv="refresh">.`,
+    affectedUrls: refreshes.map(({ p, tag }) => ({
+      url: norm(p.url),
+      note: tag.match(/\bcontent=["']([^"']*)["']/i)?.[1] ?? "refresh",
+    })),
+    files: [{ path: hints.config, reason: "Declare the redirect in the framework's redirects config.", confidence: 50 }],
+    canAutoFix: false,
+  });
+
+  const noWidth = ok.filter((p) => p.viewport && !/\bwidth\s*=/i.test(p.viewport));
+  push({
+    ruleId: "perf-viewport-no-width",
+    category: "performance",
+    title: "Viewport meta without a width",
+    description:
+      "A viewport tag without width=device-width leaves phones rendering the page at desktop width, then shrinking it. Google's mobile-first indexing sees the zoomed-out version. Add width=device-width.",
+    impact: "medium",
+    effort: "low",
+    risk: "low",
+    confidence: 95,
+    evidence: `${noWidth.length} page${noWidth.length === 1 ? "" : "s"} have a viewport tag with no width.`,
+    affectedUrls: noWidth.map((p) => ({ url: norm(p.url), note: `content="${p.viewport}"` })),
+    files: [{ path: hints.layout, reason: 'Set content="width=device-width, initial-scale=1" in the root layout.', confidence: 65 }],
+    canAutoFix: false,
+  });
+
+  // Links a browser may forgive but a crawler won't follow.
+  const MALFORMED: [RegExp, string][] = [
+    [/^https?:\/(?!\/)/i, "one slash after the scheme"],
+    [/^https?\/\//i, "missing colon after http"],
+    [/^(?:htp|htps|htt|hhtp|htttp|htttps|ttp|ttps):/i, "misspelled scheme"],
+    [/\\/, "backslash in the URL"],
+    [/^\S*\s+\S/, "space inside the URL"],
+  ];
+  const malformed = ok
+    .map((p) => {
+      const found = p.links
+        .map((l) => l.href.trim())
+        .filter((h) => h && !/^(mailto|tel|javascript|data|sms):/i.test(h) && !h.startsWith("#"))
+        .map((h) => ({ h, why: MALFORMED.find(([re]) => re.test(h))?.[1] }))
+        .filter((x): x is { h: string; why: string } => Boolean(x.why));
+      return { p, found };
+    })
+    .filter((x) => x.found.length > 0);
+  push({
+    ruleId: "link-malformed",
+    category: "internal-linking",
+    title: "Links with a malformed URL",
+    description:
+      "These links have a typo in their URL (a missing colon or slash, a backslash, a space). Browsers sometimes guess what was meant, but crawlers don't, so the page behind the link isn't reached through it. Fix the href.",
+    impact: "medium",
+    effort: "low",
+    risk: "low",
+    confidence: 90,
+    evidence: `${malformed.reduce((n, x) => n + x.found.length, 0)} malformed link${malformed.length === 1 && malformed[0]!.found.length === 1 ? "" : "s"} on ${malformed.length} page${malformed.length === 1 ? "" : "s"}.`,
+    affectedUrls: malformed.map(({ p, found }) => ({
+      url: norm(p.url),
+      note: found.slice(0, 2).map((f) => `"${f.h.slice(0, 60)}" (${f.why})`).join(", "),
+    })),
+    files: [{ path: hints.page, reason: "Correct the href where the link is written.", confidence: 60 }],
+    canAutoFix: false,
+  });
+
   return issues;
 }

@@ -175,6 +175,14 @@ export type ChangelogEntry = { date: string; title: string; notes: string[] };
 /** Newest first. Dates also drive sitemap lastModified for content routes. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-27",
+    title: "Seven new checks, and audits that follow www",
+    notes: [
+      "An audit of example.com, when the site redirects to www.example.com (or http to https), used to stop at the homepage and score 100. The crawl now follows the site to where it lands.",
+      "New checks: the www and bare domain both serving the site, an http:// homepage that doesn't redirect to HTTPS, robots.txt lines crawlers can't read, pages with several canonical tags, meta refresh redirects, a viewport without width, and malformed link URLs.",
+    ],
+  },
+  {
     date: "2026-10-25",
     title: "RankForge is now Septune",
     notes: [

@@ -324,6 +324,60 @@ export interface SiteFiles {
   sitemapTruncated?: boolean;
   /** HTTPS certificate of the start URL's host; null on http:// or when unreachable. */
   tls?: TlsInfo | null;
+  /** The other host spelling (www / bare) and the http:// homepage: where they land. */
+  hostVariants?: HostVariant[];
+}
+
+export interface HostVariant {
+  kind: "host" | "http";
+  url: string;
+  /** Final status after redirects; 0 when the host doesn't resolve or answer. */
+  status: number;
+  finalUrl: string;
+  /** Canonical declared by the page it landed on, when it answered 200. */
+  canonical: string | null;
+}
+
+/**
+ * The homepage under its other spellings: www.example.com when the site is
+ * example.com (and the reverse), and http:// when it's served over https.
+ * Each should redirect to the one real address, or at least declare it as
+ * canonical, otherwise search engines index the site twice.
+ */
+async function probeHostVariants(origin: string): Promise<HostVariant[]> {
+  let site: URL;
+  try {
+    site = new URL(origin);
+  } catch {
+    return [];
+  }
+  const targets: { kind: HostVariant["kind"]; url: string }[] = [];
+  const isNameHost = site.hostname.includes(".") && !/^[\d.]+$/.test(site.hostname) && !site.hostname.includes(":");
+  if (isNameHost) {
+    const other = site.hostname.startsWith("www.") ? site.hostname.slice(4) : `www.${site.hostname}`;
+    targets.push({ kind: "host", url: `${site.protocol}//${other}${site.port ? `:${site.port}` : ""}/` });
+  }
+  if (site.protocol === "https:") targets.push({ kind: "http", url: `http://${site.host}/` });
+
+  return Promise.all(
+    targets.map(async ({ kind, url }) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
+      try {
+        const res = await guardedFetch(url, { signal: ctrl.signal, headers: { "user-agent": SEPTUNE_BOT_UA } });
+        const html = res.ok ? (await res.text()).slice(0, 64_000) : "";
+        if (!res.ok) res.body?.cancel().catch(() => {});
+        const canonical = html.match(/<link\b[^>]*\brel=["']?canonical["']?[^>]*\bhref=["']([^"']+)["']/i)?.[1] ??
+          html.match(/<link\b[^>]*\bhref=["']([^"']+)["'][^>]*\brel=["']?canonical["']?/i)?.[1] ??
+          null;
+        return { kind, url, status: res.status, finalUrl: res.url || url, canonical };
+      } catch {
+        return { kind, url, status: 0, finalUrl: url, canonical: null };
+      } finally {
+        clearTimeout(timer);
+      }
+    }),
+  );
 }
 
 /**
@@ -371,11 +425,12 @@ export async function probeSiteFiles(
 
   // A path that cannot exist: a healthy site answers 404, not 200.
   const notFoundProbe = `/septune-404-check-${Math.random().toString(36).slice(2, 10)}`;
-  const [robots, llms, tls, missing] = await Promise.all([
+  const [robots, llms, tls, missing, hostVariants] = await Promise.all([
     get("/robots.txt", 100_000),
     get("/llms.txt", 16_000),
     opts?.tls === false ? Promise.resolve(null) : probeTls(startUrl, opts?.light ? 3500 : 6000).catch(() => null),
     get(notFoundProbe, 0),
+    probeHostVariants(origin).catch(() => []),
   ]);
   const landedPath = (() => {
     try {
@@ -414,6 +469,7 @@ export async function probeSiteFiles(
     sitemapFiles: sitemap?.files ?? [],
     sitemapTruncated: sitemap?.truncated ?? false,
     tls,
+    hostVariants,
   };
 }
 

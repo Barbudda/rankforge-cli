@@ -35,12 +35,15 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "indexing-robots-blocks-google", category: "indexing", impact: "critical", title: "robots.txt blocks Googlebot from the whole site" },
   { id: "indexing-robots-blocks-pages", category: "indexing", impact: "high", title: "Pages Googlebot isn't allowed to crawl" },
   { id: "indexing-robots-html", category: "indexing", impact: "medium", title: "robots.txt is an HTML page" },
+  { id: "indexing-robots-format", category: "indexing", impact: "medium", title: "robots.txt has lines crawlers can't read" },
   { id: "indexing-broken-page", category: "indexing", impact: "high", title: "Pages returning an error status" },
   { id: "indexing-soft-404-site", category: "indexing", impact: "high", title: "Missing pages return 200 instead of 404" },
   { id: "indexing-soft-404", category: "indexing", impact: "medium", title: "Error pages served with HTTP 200 (soft 404)" },
   { id: "indexing-canonical-missing", category: "indexing", impact: "medium", title: "Pages missing a canonical URL", doc: "indexing-canonical-missing" },
   { id: "indexing-canonical-mismatch", category: "indexing", impact: "high", title: "Canonical points to a different page", doc: "indexing-canonical-missing" },
   { id: "indexing-canonical-target-invalid", category: "indexing", impact: "high", title: "Canonical points to a page that can't be indexed" },
+  { id: "indexing-canonical-multiple", category: "indexing", impact: "high", title: "Pages with more than one canonical tag" },
+  { id: "indexing-meta-refresh", category: "indexing", impact: "medium", title: "Pages that redirect with a meta refresh" },
   { id: "indexing-hreflang-invalid", category: "indexing", impact: "high", title: "hreflang annotations Google will ignore" },
   { id: "indexing-duplicate-content", category: "indexing", impact: "high", title: "Near-duplicate page content" },
   { id: "indexing-redirect-chain", category: "indexing", impact: "low", title: "Links through redirect chains" },
@@ -48,6 +51,8 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "indexing-sitemap-hygiene", category: "indexing", impact: "medium", title: "Sitemap lists URLs that shouldn't be indexed" },
   { id: "indexing-sitemap-gaps", category: "indexing", impact: "low", title: "Indexable pages missing from the sitemap", doc: "indexing-sitemap-incomplete" },
   { id: "indexing-https-certificate", category: "indexing", impact: "high", title: "HTTPS certificate expired, untrusted or expiring soon" },
+  { id: "indexing-host-duplicate", category: "indexing", impact: "high", title: "www and non-www both serve the site" },
+  { id: "indexing-http-not-redirected", category: "indexing", impact: "high", title: "The http:// version doesn't redirect to https://" },
 
   // structure
   { id: "structure-h1-missing", category: "structure", impact: "medium", title: "Pages with no <h1>", doc: "structure-h1-multiple" },
@@ -73,6 +78,7 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "link-deep-pages", category: "internal-linking", impact: "medium", title: "Pages buried deep in the click path" },
   { id: "link-broken-internal", category: "internal-linking", impact: "medium", title: "Internal links to broken pages" },
   { id: "link-broken-external", category: "internal-linking", impact: "medium", title: "Links to broken destinations" },
+  { id: "link-malformed", category: "internal-linking", impact: "medium", title: "Links with a malformed URL" },
   { id: "link-generic-anchors", category: "internal-linking", impact: "low", title: "Non-descriptive internal anchor text", doc: "linking-weak-anchors" },
   { id: "link-missing-internal-opportunities", category: "internal-linking", impact: "medium", title: "Missing internal links between related pages" },
 
@@ -84,6 +90,7 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "perf-heavy-html", category: "performance", impact: "low", title: "Very large HTML documents" },
   { id: "perf-mixed-content", category: "performance", impact: "high", title: "Insecure (http) resources on a secure page" },
   { id: "perf-viewport-missing", category: "performance", impact: "high", title: "Missing mobile viewport meta" },
+  { id: "perf-viewport-no-width", category: "performance", impact: "medium", title: "Viewport meta without a width" },
 
   // framework
   { id: "framework-sitemap-missing", category: "framework", impact: "medium", title: "No sitemap.xml" },

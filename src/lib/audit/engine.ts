@@ -41,6 +41,8 @@ export interface SiteFilesInput {
   notFoundLandedOn?: string;
   /** HTTPS certificate of the site's host. */
   tls?: TlsInfo | null;
+  /** The homepage under its other spellings (www / bare, http://): where each landed. */
+  hostVariants?: { kind: "host" | "http"; url: string; status: number; finalUrl: string; canonical: string | null }[];
   /** The crawl drained every linked page (no page cap or deadline cut). */
   crawlComplete?: boolean;
   /** Core Web Vitals field data (CrUX), when the caller fetched it. */

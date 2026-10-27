@@ -18,6 +18,16 @@ and never promise rankings or citations, since nobody outside the search engines
    site, pass `ignoreRobots: true`.
 3. **Triage.** Start with critical and high impact. For each issue, tell the user in one
    sentence what's wrong, on which pages, and the evidence Septune gave.
+   **If the user also has a Semrush MCP server connected** (its tools are named like
+   `organic_research`, `domain_overview`, `get_report_schema`, `execute_report`), weigh the
+   issues by what's at stake, but only on a production URL: Semrush knows nothing about
+   localhost. Fetch the domain's organic pages (traffic and keyword count per URL), then
+   rank Septune's issues by the traffic of the pages they touch. A noindex on a page with
+   traffic comes before a missing alt on a page without any. Keep it to one or two report
+   calls: they spend the user's Semrush API units. Quote Semrush's figures as estimates,
+   never as measurements. If Semrush answers that units or data are missing, say so in one
+   line and triage on impact alone. Septune's findings stay the source of truth; Semrush
+   only orders them.
 4. **Fix in the repository.**
    - When an issue has `deterministicFixAvailable`, call `get_fix_template` with its
      `ruleId` and the framework, then adapt the patch to the actual files.

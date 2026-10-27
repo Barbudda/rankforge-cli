@@ -66,7 +66,7 @@ export async function handleMessage(raw: unknown): Promise<unknown | null> {
           version: SERVER_VERSION,
         },
         instructions:
-          "Septune measures technical SEO deterministically. Typical loop: audit_site on the dev/prod URL → fix the reported issues in this repository (get_fix_template gives idiomatic patches for mechanical ones) → re-run audit_site to verify. Use seo_docs to explain any issue to the user. Never promise search-ranking outcomes.",
+          "Septune measures technical SEO deterministically. Typical loop: audit_site on the dev/prod URL → fix the reported issues in this repository (get_fix_template gives idiomatic patches for mechanical ones) → re-run audit_site to verify. Use seo_docs to explain any issue to the user. Never promise search-ranking outcomes. If a Semrush MCP server is also connected, you may rank Septune's issues on a production URL by the organic traffic of the pages they touch (one or two Semrush report calls; they spend the user's API units). Quote Semrush figures as estimates; Septune's findings stay the source of truth.",
       });
     }
     case "ping":

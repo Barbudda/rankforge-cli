@@ -17,6 +17,8 @@
 - New indexing checks: `X-Robots-Tag` headers, canonicals pointing at pages that redirect, fail or are noindexed, hreflang (invalid language and region codes, missing self-reference and return links), soft 404s, robots.txt failing with 5xx or served as HTML or blocking Googlebot, sitemap hygiene and gaps, HTTPS certificate expired, untrusted or expiring within 14 days.
 - Structured data checks follow Google's current rich-result requirements (Product, Event, Recipe, JobPosting, VideoObject, LocalBusiness, Review, BreadcrumbList). FAQ and HowTo markup are no longer recommended: Google stopped showing those rich results.
 - Orphan detection counts pages only the sitemap lists.
+- The crawl follows the site where it lands: auditing `example.com` when it redirects to `www.example.com` (or `http` to `https`) used to read a single page and score 100.
+- Seven checks from the usual site-audit error list: the `www` and bare domain both serving the site, an `http://` homepage that doesn't redirect to HTTPS, robots.txt lines crawlers can't read (typos, `Noindex`), pages with several canonical tags, meta refresh redirects, a viewport without `width`, and malformed link URLs.
 
 **Real-user data**
 - **`septune vitals <url>`** and `--vitals`: Core Web Vitals (LCP, INP, CLS, FCP, TTFB, p75) from Google's Chrome UX Report, for the page or the whole origin. Needs a free `CRUX_API_KEY`. It is the only call Septune makes to a third party, and only when you ask for it.
@@ -29,7 +31,7 @@
 **Editors and reports**
 - **Claude Code plugin**: `/plugin marketplace add Barbudda/septune`, then `/plugin install septune@septune`. Adds the MCP tools and the `/septune:seo` and `/septune:check` skills.
 - New MCP tool **`compare_sites`**: production vs local or preview, from your editor. `audit_site` takes `ignoreRobots`, and the local server crawls up to 200 pages.
-- `septune rules` and `list_rules` now list the 55 checks under the same `ruleId`s audits return (the old catalog used different ids). A test keeps the catalog in sync with the engine.
+- `septune rules` and `list_rules` now list the 62 checks under the same `ruleId`s audits return (the old catalog used different ids). A test keeps the catalog in sync with the engine.
 - White-label HTML reports: `--brand`, `--brand-url`, `--brand-color`. A branded report doesn't mention Septune.
 - `septune fix` prints the patch's notes (what to adapt per page) under the diff.
 
