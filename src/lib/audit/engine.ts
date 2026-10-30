@@ -97,18 +97,21 @@ export interface EngineResult {
 // ── Framework file hints ────────────────────────────────────────────
 // Best-guess source locations per framework, so findings point somewhere
 // actionable even before the fix swarm inspects the repo.
-function fileHint(framework: Framework, kind: "layout" | "page" | "config" | "sitemap" | "robots"): string {
-  const map: Record<Framework, Record<string, string>> = {
-    nextjs: { layout: "app/layout.tsx", page: "app/**/page.tsx", config: "next.config.mjs", sitemap: "app/sitemap.ts", robots: "app/robots.ts" },
-    nuxt: { layout: "app.vue", page: "pages/**/*.vue", config: "nuxt.config.ts", sitemap: "server/routes/sitemap.xml.ts", robots: "public/robots.txt" },
-    astro: { layout: "src/layouts/Layout.astro", page: "src/pages/**/*.astro", config: "astro.config.mjs", sitemap: "astro.config.mjs (sitemap integration)", robots: "public/robots.txt" },
-    sveltekit: { layout: "src/routes/+layout.svelte", page: "src/routes/**/+page.svelte", config: "svelte.config.js", sitemap: "src/routes/sitemap.xml/+server.ts", robots: "static/robots.txt" },
-    remix: { layout: "app/root.tsx", page: "app/routes/**/*.tsx", config: "remix.config.js", sitemap: "app/routes/sitemap[.]xml.tsx", robots: "public/robots.txt" },
-    "vite-react": { layout: "index.html", page: "src/**/*.tsx", config: "vite.config.ts", sitemap: "public/sitemap.xml", robots: "public/robots.txt" },
-    mdx: { layout: "src/layouts/*", page: "content/**/*.mdx", config: "config.*", sitemap: "public/sitemap.xml", robots: "public/robots.txt" },
-    static: { layout: "template.html", page: "**/*.html", config: "-", sitemap: "sitemap.xml", robots: "robots.txt" },
-  };
-  return map[framework]?.[kind] ?? "-";
+export type FileKind = "layout" | "page" | "config" | "sitemap" | "robots";
+
+export const FRAMEWORK_FILES: Record<Framework, Record<FileKind, string>> = {
+  nextjs: { layout: "app/layout.tsx", page: "app/**/page.tsx", config: "next.config.mjs", sitemap: "app/sitemap.ts", robots: "app/robots.ts" },
+  nuxt: { layout: "app.vue", page: "pages/**/*.vue", config: "nuxt.config.ts", sitemap: "server/routes/sitemap.xml.ts", robots: "public/robots.txt" },
+  astro: { layout: "src/layouts/Layout.astro", page: "src/pages/**/*.astro", config: "astro.config.mjs", sitemap: "astro.config.mjs (sitemap integration)", robots: "public/robots.txt" },
+  sveltekit: { layout: "src/routes/+layout.svelte", page: "src/routes/**/+page.svelte", config: "svelte.config.js", sitemap: "src/routes/sitemap.xml/+server.ts", robots: "static/robots.txt" },
+  remix: { layout: "app/root.tsx", page: "app/routes/**/*.tsx", config: "remix.config.js", sitemap: "app/routes/sitemap[.]xml.tsx", robots: "public/robots.txt" },
+  "vite-react": { layout: "index.html", page: "src/**/*.tsx", config: "vite.config.ts", sitemap: "public/sitemap.xml", robots: "public/robots.txt" },
+  mdx: { layout: "src/layouts/*", page: "content/**/*.mdx", config: "config.*", sitemap: "public/sitemap.xml", robots: "public/robots.txt" },
+  static: { layout: "template.html", page: "**/*.html", config: "-", sitemap: "sitemap.xml", robots: "robots.txt" },
+};
+
+function fileHint(framework: Framework, kind: FileKind): string {
+  return FRAMEWORK_FILES[framework]?.[kind] ?? "-";
 }
 
 /** Health penalty knobs per severity — used to turn issue counts into scores. */

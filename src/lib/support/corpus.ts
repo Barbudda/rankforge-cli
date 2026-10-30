@@ -10,7 +10,8 @@
  * similarity. Server-only: never import from client components.
  */
 import { embed, cosine } from "@/lib/brain/embed";
-import { SEO_RULES } from "@/lib/audit/rules";
+import { RULE_PAGES } from "@/lib/audit/rule-docs";
+import { FIXABLE_RULE_IDS } from "@/lib/audit/deterministic-fix";
 import { AUTONOMY_LEVELS } from "@/lib/agent";
 import { BILLING_NOTE, PRICING_TIERS, ROADMAP } from "@/lib/pricing";
 import {
@@ -18,7 +19,6 @@ import {
   FAQS,
   FRAMEWORK_PAGES,
   PRICING_FAQS,
-  ruleSlug,
 } from "@/lib/seo/content";
 
 export interface CorpusChunk {
@@ -91,17 +91,17 @@ function buildChunks(): CorpusChunk[] {
     url: "/#security",
   });
 
-  // ── Every detected issue class (15 docs pages) ─────────────────
-  for (const rule of SEO_RULES) {
+  // ── Every check of the engine (one docs page each) ─────────────
+  for (const rule of RULE_PAGES) {
     chunks.push({
       id: `rule:${rule.id}`,
       title: rule.title,
-      text: `${rule.title} (category: ${rule.category}). ${rule.description} Default impact: ${rule.defaultImpact}, effort: ${rule.defaultEffort}, risk: ${rule.defaultRisk}. ${
-        rule.canAutoFix
-          ? "Septune prepares a patch for this class of issue, with what to adapt and how to verify it; you or your AI editor apply it."
-          : "This class of issue is reported with affected pages and concrete guidance. It needs a human decision rather than an automatic patch."
-      }${rule.frameworks?.length ? ` Tailored fixes exist for: ${rule.frameworks.join(", ")}.` : ""}`,
-      url: `/docs/issues/${ruleSlug(rule.id)}`,
+      text: `${rule.title} (ruleId ${rule.id}, category: ${rule.category}, impact: ${rule.impact}). ${rule.summary} What Septune measures: ${rule.measured} Fix: ${rule.fix} ${
+        FIXABLE_RULE_IDS.includes(rule.id)
+          ? "Septune generates a patch for this check (septune fix or the get_fix_template tool); you or your AI editor apply it."
+          : "This check is reported with the affected pages and the evidence; the fix needs a human decision."
+      }`,
+      url: `/docs/issues/${rule.id}`,
     });
   }
 

@@ -1,30 +1,22 @@
 /**
- * Shared content taxonomy for the marketing docs & framework pages.
- * Everything derives from the audit engine's rule catalog (SEO_RULES) so
- * the public docs and the detector can never drift apart — and the sitemap
- * imports from here so no page is ever missing from it.
+ * Shared content for the marketing pages (framework guides, FAQs, changelog).
+ * The rule pages derive from the engine's catalog in src/lib/audit/rule-docs.ts;
+ * the sitemap imports from both, so no page is ever missing from it.
  */
-import { SEO_RULES } from "@/lib/audit/rules";
-import type { SeoRule } from "@/lib/audit/types";
+import type { Framework } from "@/types";
 import { RULE_CATALOG } from "@/lib/audit/catalog";
 import { BILLING_OPEN } from "@/lib/pricing";
 
-/** URL slug for a rule: "meta.title.missing" → "meta-title-missing". */
-export function ruleSlug(id: string): string {
-  return id.replace(/\./g, "-");
-}
-
-export function getRuleBySlug(slug: string): SeoRule | undefined {
-  return SEO_RULES.find((r) => ruleSlug(r.id) === slug);
-}
-
-export const DOC_RULES = SEO_RULES;
-
 export type FrameworkPage = {
-  slug: string;
+  slug: Framework;
   name: string;
   blurb: string;
   metaApi: string;
+  /** The two guides this one links to, in its text. */
+  compare: [Framework, Framework];
+  /** First published / last content change (YYYY-MM-DD, from the repository). */
+  published: string;
+  updated: string;
 };
 
 /** Framework landing pages — slugs match the footer links. */
@@ -35,6 +27,9 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     blurb:
       "App Router metadata, generateMetadata on dynamic routes, sitemap.ts and robots.ts conventions. Septune points each rendered issue at the route file most likely behind it.",
     metaApi: "generateMetadata / metadata export",
+    compare: ["nuxt", "astro"],
+    published: "2026-07-06",
+    updated: "2026-10-30",
   },
   {
     slug: "nuxt",
@@ -42,6 +37,9 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     blurb:
       "useSeoMeta and useHead usage, server-rendered meta parity, and Nitro-generated sitemaps, with each issue pointed at the page or composable most likely behind it.",
     metaApi: "useSeoMeta / useHead",
+    compare: ["nextjs", "sveltekit"],
+    published: "2026-07-06",
+    updated: "2026-10-30",
   },
   {
     slug: "astro",
@@ -49,6 +47,9 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     blurb:
       "Frontmatter-driven meta, content-collection pages and Astro's static output. Each issue points at the .astro layout or collection most likely behind it.",
     metaApi: "frontmatter + <head> in layouts",
+    compare: ["nextjs", "nuxt"],
+    published: "2026-07-06",
+    updated: "2026-10-30",
   },
   {
     slug: "sveltekit",
@@ -56,6 +57,9 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     blurb:
       "svelte:head management, +page load metadata and prerendered routes; each issue points at the +page.svelte or layout file most likely behind it.",
     metaApi: "<svelte:head> / load data",
+    compare: ["nuxt", "nextjs"],
+    published: "2026-07-06",
+    updated: "2026-10-30",
   },
 ];
 
@@ -63,12 +67,6 @@ export function getFramework(slug: string): FrameworkPage | undefined {
   return FRAMEWORK_PAGES.find((f) => f.slug === slug);
 }
 
-/** Rules relevant to a framework (tagged rules + all untagged generic ones). */
-export function rulesForFramework(slug: string): SeoRule[] {
-  return SEO_RULES.filter(
-    (r) => !r.frameworks || (r.frameworks as readonly string[]).includes(slug),
-  );
-}
 
 /**
  * FAQ content — single source for the visible FAQ sections, the FAQPage
@@ -174,6 +172,17 @@ export type ChangelogEntry = { date: string; title: string; notes: string[] };
 
 /** Newest first. Dates also drive sitemap lastModified for content routes. */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    date: "2026-10-30",
+    title: "A documentation page for each of the 67 checks",
+    notes: [
+      "Every check has its own page at /docs/issues/<ruleId>: the markup that fails, what Septune measures, what happens if you leave it, the fix with notes for Next.js, Nuxt, Astro and SvelteKit, and how to confirm it's gone.",
+      "The 9 checks with a ready patch show the patch Septune writes for each of those four frameworks.",
+      "The robots.txt patch for a file that names no sitemap now adds the Sitemap line and keeps the rules already there, instead of writing a new file.",
+      "Internal-link suggestions no longer propose a link the page already has.",
+      "The framework guides list the files Septune points findings at and the patches it writes for that framework.",
+    ],
+  },
   {
     date: "2026-10-27",
     title: "Twelve new checks, and audits that follow www",

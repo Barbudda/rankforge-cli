@@ -343,7 +343,7 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: "list_rules",
     description:
-      "List Septune's technical-SEO rule catalog: every issue the audit can report, under the same ruleId audit_site returns, with its category, default impact, whether get_fix_template has a patch for it, and its documentation URL when there is one.",
+      "List Septune's technical-SEO rule catalog: every issue the audit can report, under the same ruleId audit_site returns, with its category, default impact, whether get_fix_template has a patch for it, and its documentation page.",
     inputSchema: { type: "object", properties: {} },
     async handler() {
       return JSON.stringify(
@@ -353,7 +353,7 @@ export const MCP_TOOLS: McpTool[] = [
           impact: r.impact,
           title: r.title,
           deterministicFixAvailable: (FIXABLE_RULES as readonly string[]).includes(r.id),
-          docs: r.doc ? `${config.appUrl}/docs/issues/${r.doc}` : null,
+          docs: `${config.appUrl}/docs/issues/${r.id}`,
         })),
         null,
         1,

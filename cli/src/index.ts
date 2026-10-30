@@ -460,7 +460,7 @@ function cmdRules(args: Args) {
           impact: r.impact,
           title: r.title,
           fixTemplate: FIXABLE_RULE_IDS.includes(r.id),
-          docs: r.doc ? `${APP_URL}/docs/issues/${r.doc}` : null,
+          docs: `${APP_URL}/docs/issues/${r.id}`,
         })),
         null,
         2,

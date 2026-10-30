@@ -131,6 +131,36 @@ const buildRobots: Builder = (issue, repo) => {
   });
 };
 
+// The robots.txt exists but names no sitemap: add the one line and keep every
+// rule already there (rewriting the file would drop its Disallow lines).
+const buildRobotsSitemapLine: Builder = (issue, repo) => {
+  const fw = repo.framework;
+  const origin = originOf(repo);
+  const sitemap = `${origin}/sitemap.xml`;
+  const keepNote = `If your sitemap lives elsewhere (for example ${origin}/sitemap-index.xml), use that URL. It must be absolute.`;
+  if (fw === "nextjs") {
+    const path = "app/robots.ts";
+    return make(issue, "robots-sitemap", {
+      summary: `Add a sitemap entry to the robots route (${path}).`,
+      filesChanged: [path],
+      diff: editDiff(path, [
+        `   return {`,
+        `     rules: { /* ...existing rules... */ },`,
+        `+    sitemap: "${sitemap}",`,
+        `   };`,
+      ]),
+      prDescription: `Adds \`sitemap\` to the object returned by \`${path}\`, so robots.txt ends with a Sitemap line. The existing rules are untouched. If the site serves a static public/robots.txt instead, add \`Sitemap: ${sitemap}\` at its end. ${keepNote}`,
+    });
+  }
+  const path = fw === "sveltekit" ? "static/robots.txt" : "public/robots.txt";
+  return make(issue, "robots-sitemap", {
+    summary: `Add a Sitemap line to ${path}.`,
+    filesChanged: [path],
+    diff: editDiff(path, [` User-agent: *`, ` # ...existing rules...`, `+`, `+Sitemap: ${sitemap}`]),
+    prDescription: `Appends \`Sitemap: ${sitemap}\` to \`${path}\`. The existing rules are untouched; the line can sit anywhere in the file, outside any group. ${keepNote}`,
+  });
+};
+
 // ── sitemap ─────────────────────────────────────────────────────────
 const buildSitemap: Builder = (issue, repo) => {
   const fw = repo.framework;
@@ -514,7 +544,7 @@ const buildOgImage: Builder = (issue, repo) => {
 // ── Rule → builder registry ─────────────────────────────────────────
 const BUILDERS: Record<string, Builder> = {
   "framework-robots-missing": buildRobots,
-  "framework-robots-no-sitemap": buildRobots,
+  "framework-robots-no-sitemap": buildRobotsSitemapLine,
   "framework-sitemap-missing": buildSitemap,
   "perf-viewport-missing": buildViewport,
   "indexing-html-lang-missing": buildLang,
