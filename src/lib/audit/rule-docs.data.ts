@@ -644,13 +644,13 @@ export const RULE_DOC_DATA = {
     ]
   },
   "indexing-sitemap-format": {
-    "summary": "A sitemap that robots.txt declares, or that a sitemap index lists, couldn't be read: it failed to download, answered with an error, came back as an HTML page, or has no <urlset> or <sitemapindex> root. Search engines skip a file they can't parse, so the URLs it holds never reach them through it.",
+    "summary": "A sitemap that robots.txt declares, or that an index lists, couldn't be read: it failed to download, answered with an error, came back as an HTML page, or has no <urlset> or <sitemapindex> root. Search engines skip a file they can't parse, so the URLs it holds never reach them through it.",
     "failing": {
       "label": "Sitemap path answered by a single-page app shell",
       "lang": "http",
       "code": "GET https://example.com/sitemap.xml\nHTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n<!doctype html><html><head><title>Example</title>"
     },
-    "measured": "Septune fetches the sitemaps named by Sitemap: lines in robots.txt (or /sitemap.xml, /sitemap_index.xml and /sitemap-index.xml, in that order, when none is declared) and every child file an index lists, stopping once 10 files have been read (2 on the free web audit). A file counts as unreadable when the request fails or times out, the status isn't 2xx, the Content-Type is text/html even if the body is XML, a gzip body can't be inflated, or the content has neither <urlset> nor <sitemapindex> and no <loc> entries. The rule fires only when robots.txt declares a sitemap or at least one sitemap was read; a site with no sitemap at all is reported by framework-sitemap-missing. The evidence names the first 3 files with their reason, and up to 20 files are listed.",
+    "measured": "Septune fetches the files named by Sitemap: lines in robots.txt (or the three usual paths, tried in turn, when none is declared) and every child file an index lists, stopping once 10 files have been read (2 on the free web audit). A file counts as unreadable when the request fails or times out, the status isn't 2xx, the Content-Type is text/html even if the body is XML, a gzip body can't be inflated, or the content has neither <urlset> nor <sitemapindex> and no <loc> entries. The rule fires only when robots.txt declares a file or at least one was read; a site with no sitemap at all is reported by framework-sitemap-missing. The evidence names the first 3 files with their reason, and up to 20 files are listed.",
     "consequence": "Every URL that only this file lists is missing from what your sitemaps tell search engines, and if you submitted the file, Search Console reports it as an error.",
     "fix": "Serve each sitemap with a 200 status and an XML Content-Type such as application/xml, with <urlset> as the root of a URL list and <sitemapindex> as the root of an index. Make robots.txt and the index point at paths that exist. The HTML case usually comes from a single-page app's catch-all route answering /sitemap.xml with index.html.",
     "frameworks": {
