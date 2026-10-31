@@ -29,10 +29,12 @@ const SYNONYM_GROUPS: string[][] = [
   ["fix", "fixes", "patch", "patches", "diff", "pullrequest", "pr"],
 ];
 
-const SYNONYM: Record<string, string> = {};
+// A Map, not an object literal: on {} a page word such as "constructor" or
+// "valueof" finds Object.prototype's function and crashes the hashing below.
+const SYNONYM = new Map<string, string>();
 for (const group of SYNONYM_GROUPS) {
   const canonical = `=${group[0]}`;
-  for (const term of group) SYNONYM[term] = canonical;
+  for (const term of group) SYNONYM.set(term, canonical);
 }
 
 /** 32-bit FNV-1a hash. */
@@ -61,7 +63,7 @@ function* features(text: string): Generator<string> {
     yield raw;
     const s = stem(raw);
     if (s !== raw) yield s;
-    const syn = SYNONYM[raw] ?? SYNONYM[s];
+    const syn = SYNONYM.get(raw) ?? SYNONYM.get(s);
     if (syn) yield syn;
     if (raw.length > 4) {
       const padded = `#${raw}#`;

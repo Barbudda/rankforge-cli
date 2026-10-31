@@ -4,7 +4,7 @@ import { SEPTUNE_BOT_UA } from "@/lib/net/user-agent";
 
 /**
  * Sitemap reader. Follows the sitemaps a site actually declares (robots.txt
- * `Sitemap:` lines, else /sitemap.xml then /sitemap_index.xml), walks sitemap
+ * `Sitemap:` lines, else /sitemap.xml, /sitemap_index.xml, /sitemap-index.xml), walks sitemap
  * indexes, and returns the page URLs they list. Bounded on every axis — files,
  * URLs, bytes, time — because a sitemap is untrusted input.
  *
@@ -127,16 +127,19 @@ export async function scanSitemaps(
   const seenFiles = new Set<string>();
   const seenUrls = new Set<string>();
 
-  const queue = declared.length ? [...declared] : [`${origin}/sitemap.xml`];
-  const fallback = declared.length ? [] : [`${origin}/sitemap_index.xml`];
+  // sitemap_index.xml is the WordPress plugins' name, sitemap-index.xml the one
+  // @astrojs/sitemap writes (it makes no sitemap.xml at all).
+  const conventional = [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`, `${origin}/sitemap-index.xml`];
+  const queue = declared.length ? [...declared] : [conventional[0]!];
+  const fallback = declared.length ? [] : conventional.slice(1);
 
   while (queue.length || fallback.length) {
     if (!queue.length) {
       // Conventional fallback only when nothing has been found yet.
       if (scan.files.length) break;
       queue.push(fallback.shift()!);
-      // The first conventional miss is expected on sites without sitemaps.
-      scan.errors = scan.errors.filter((e) => !e.file.endsWith("/sitemap.xml"));
+      // A conventional miss is expected while the next name is tried.
+      scan.errors = scan.errors.filter((e) => !conventional.includes(e.file));
     }
     const file = queue.shift()!;
     if (seenFiles.has(file)) continue;

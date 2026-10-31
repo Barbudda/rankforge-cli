@@ -25,6 +25,7 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "meta-description-missing", category: "metadata", impact: "medium", title: "Pages missing a meta description" },
   { id: "meta-description-duplicate", category: "metadata", impact: "low", title: "Duplicate meta descriptions" },
   { id: "meta-og-image-missing", category: "metadata", impact: "low", title: "Pages without an OpenGraph image" },
+  { id: "meta-og-image-url", category: "metadata", impact: "low", title: "og:image is a relative or localhost URL" },
   { id: "content-keyword-alignment", category: "metadata", impact: "low", title: "Title and H1 don't reflect the page's content" },
 
   // indexing
@@ -100,4 +101,5 @@ export const RULE_CATALOG: CatalogRule[] = [
   { id: "framework-sitemap-missing", category: "framework", impact: "medium", title: "No sitemap.xml" },
   { id: "framework-robots-missing", category: "framework", impact: "low", title: "No robots.txt" },
   { id: "framework-robots-no-sitemap", category: "framework", impact: "low", title: "robots.txt doesn't reference the sitemap" },
+  { id: "framework-js-only-content", category: "framework", impact: "high", title: "Page content only appears after JavaScript runs" },
 ];

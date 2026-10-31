@@ -20,6 +20,9 @@
 - The crawl follows the site where it lands: auditing `example.com` when it redirects to `www.example.com` (or `http` to `https`) used to read a single page and score 100.
 - Seven checks from the usual site-audit error list: the `www` and bare domain both serving the site, an `http://` homepage that doesn't redirect to HTTPS, robots.txt lines crawlers can't read (typos, `Noindex`), pages with several canonical tags, meta refresh redirects, a viewport without `width`, and malformed link URLs.
 - Five more, measured: images that fail to load, the site's own CSS and JavaScript files that fail to load, internal links through temporary (302/307) redirects (a sign-in wall excepted), sitemap files that can't be read, and URLs with underscores, more than two parameters or over 200 characters.
+- Two more: an `og:image` that is relative or on localhost (the Next.js patch sets `metadataBase`), and pages whose HTML is an empty app shell that JavaScript fills in the browser.
+- `sitemap-index.xml`, the only file `@astrojs/sitemap` writes, is found without a robots.txt line, and the Astro robots and sitemap patches name it.
+- A page containing a word such as `constructor` no longer crashes the audit.
 
 **Real-user data**
 - **`septune vitals <url>`** and `--vitals`: Core Web Vitals (LCP, INP, CLS, FCP, TTFB, p75) from Google's Chrome UX Report, for the page or the whole origin. Needs a free `CRUX_API_KEY`. It is the only call Septune makes to a third party, and only when you ask for it.

@@ -97,10 +97,21 @@ function nuxtHeadDiff(entry: string[]): string {
 
 const NUXT_MERGE_NOTE = "If `app.head` already exists, merge the entry into it.";
 
+/**
+ * The sitemap a robots.txt should name: the one the crawl read (the engine puts
+ * it in the note), else the framework's usual file. @astrojs/sitemap writes
+ * sitemap-index.xml and no sitemap.xml.
+ */
+function sitemapUrlFor(issue: SeoIssue, repo: Repository): string {
+  const origin = originOf(repo);
+  const read = issue.affectedUrls?.map((u) => u.note ?? "").find((n) => n.startsWith(`${origin}/`));
+  return read ?? `${origin}/${repo.framework === "astro" ? "sitemap-index.xml" : "sitemap.xml"}`;
+}
+
 // ── robots.txt / robots route ───────────────────────────────────────
 const buildRobots: Builder = (issue, repo) => {
   const fw = repo.framework;
-  const origin = originOf(repo);
+  const sitemap = sitemapUrlFor(issue, repo);
   if (fw === "nextjs") {
     const path = "app/robots.ts";
     const code = [
@@ -109,7 +120,7 @@ const buildRobots: Builder = (issue, repo) => {
       `export default function robots(): MetadataRoute.Robots {`,
       `  return {`,
       `    rules: { userAgent: "*", allow: "/" },`,
-      `    sitemap: "${origin}/sitemap.xml",`,
+      `    sitemap: "${sitemap}",`,
       `  };`,
       `}`,
     ];
@@ -122,7 +133,7 @@ const buildRobots: Builder = (issue, repo) => {
   }
   // Universal static robots.txt for every other framework.
   const path = fw === "sveltekit" ? "static/robots.txt" : "public/robots.txt";
-  const content = [`User-agent: *`, `Allow: /`, ``, `Sitemap: ${origin}/sitemap.xml`];
+  const content = [`User-agent: *`, `Allow: /`, ``, `Sitemap: ${sitemap}`];
   return make(issue, "robots", {
     summary: `Add ${path} allowing crawling and referencing the sitemap.`,
     filesChanged: [path],
@@ -135,9 +146,8 @@ const buildRobots: Builder = (issue, repo) => {
 // rule already there (rewriting the file would drop its Disallow lines).
 const buildRobotsSitemapLine: Builder = (issue, repo) => {
   const fw = repo.framework;
-  const origin = originOf(repo);
-  const sitemap = `${origin}/sitemap.xml`;
-  const keepNote = `If your sitemap lives elsewhere (for example ${origin}/sitemap-index.xml), use that URL. It must be absolute.`;
+  const sitemap = sitemapUrlFor(issue, repo);
+  const keepNote = "If the site has several sitemaps, add one line per file, or name the index. The URL must be absolute.";
   if (fw === "nextjs") {
     const path = "app/robots.ts";
     return make(issue, "robots-sitemap", {
@@ -187,6 +197,25 @@ const buildSitemap: Builder = (issue, repo) => {
       filesChanged: [path],
       diff: newFileDiff(path, code),
       prDescription: `Adds \`${path}\`. Extend \`routes\` (or derive it from your content) so every indexable URL is listed.\n\n${fence}ts\n${code.join("\n")}\n${fence}`,
+      confidence: 80,
+    });
+  }
+  if (fw === "astro") {
+    const path = "astro.config.mjs";
+    return make(issue, "sitemap", {
+      summary: "Turn on the @astrojs/sitemap integration and set `site`.",
+      filesChanged: [path, "package.json"],
+      diff: editDiff(path, [
+        ` import { defineConfig } from "astro/config";`,
+        `+import sitemap from "@astrojs/sitemap";`,
+        ` `,
+        ` export default defineConfig({`,
+        `+  site: "${origin}",`,
+        `+  integrations: [sitemap()],`,
+        `   /* ...existing config... */`,
+        ` });`,
+      ]),
+      prDescription: `Install the integration with \`npx astro add sitemap\`, which also edits \`${path}\`. It needs \`site\` to write absolute URLs, and the build then emits \`sitemap-index.xml\` and \`sitemap-0.xml\` (there is no sitemap.xml). If \`integrations\` already exists, add \`sitemap()\` to it.`,
       confidence: 80,
     });
   }
@@ -541,6 +570,65 @@ const buildOgImage: Builder = (issue, repo) => {
   });
 };
 
+// og:image is set but relative or on localhost. In Next.js that is a missing
+// metadataBase: relative image and canonical URLs resolve against it.
+const buildOgImageUrl: Builder = (issue, repo) => {
+  const fw = repo.framework;
+  const origin = originOf(repo);
+  if (fw === "nextjs") {
+    const path = "app/layout.tsx";
+    return make(issue, "og-image-url", {
+      summary: `Set metadataBase in ${path} so og:image resolves to ${origin}.`,
+      filesChanged: [path],
+      diff: editDiff(path, [
+        ` export const metadata: Metadata = {`,
+        `+  metadataBase: new URL("${origin}"),`,
+        `   /* ...existing metadata... */`,
+        ` };`,
+      ]),
+      prDescription: `Adds \`metadataBase\` to the root layout's metadata, which every route inherits. Next.js resolves relative \`openGraph.images\`, \`twitter.images\` and \`alternates.canonical\` against it. Without it, images fall back to the deployment URL on Vercel and to http://localhost:3000 everywhere else, and a relative canonical is printed as is. Read the origin from an environment variable if you prefer, but it must be defined when \`next build\` runs.`,
+      confidence: 85,
+    });
+  }
+  if (fw === "nuxt") {
+    return make(issue, "og-image-url", {
+      summary: "Write og:image as an absolute URL in nuxt.config.ts.",
+      filesChanged: ["nuxt.config.ts"],
+      diff: nuxtHeadDiff([`meta: [{ property: "og:image", content: "${origin}/og-cover.png" }],`]),
+      prDescription: `Gives \`og:image\` the full URL of the image. Pages that set their own image with useSeoMeta need the same absolute form. ${NUXT_MERGE_NOTE}`,
+      confidence: 65,
+    });
+  }
+  if (fw === "astro") {
+    const path = layoutFile(fw);
+    return make(issue, "og-image-url", {
+      summary: `Build og:image from Astro.site in ${path}.`,
+      filesChanged: [path],
+      diff: editDiff(path, [
+        `   <head>`,
+        `-    <meta property="og:image" content="/og-cover.png" />`,
+        `+    <meta property="og:image" content={new URL("/og-cover.png", Astro.site)} />`,
+        `   </head>`,
+      ]),
+      prDescription: "Resolves the image against `site` from astro.config.mjs, so every page gets an absolute URL. `site` must be set.",
+      confidence: 70,
+    });
+  }
+  const path = layoutFile(fw);
+  return make(issue, "og-image-url", {
+    summary: `Write og:image as an absolute URL in ${path}.`,
+    filesChanged: [path],
+    diff: editDiff(path, [
+      `   <head>`,
+      `-    <meta property="og:image" content="/og-cover.png" />`,
+      `+    <meta property="og:image" content="${origin}/og-cover.png" />`,
+      `   </head>`,
+    ]),
+    prDescription: "Replaces the relative path with the image's full URL on the production domain.",
+    confidence: 65,
+  });
+};
+
 // ── Rule → builder registry ─────────────────────────────────────────
 const BUILDERS: Record<string, Builder> = {
   "framework-robots-missing": buildRobots,
@@ -552,6 +640,7 @@ const BUILDERS: Record<string, Builder> = {
   "schema-missing": buildSchema,
   "schema-website-missing": buildSchema,
   "meta-og-image-missing": buildOgImage,
+  "meta-og-image-url": buildOgImageUrl,
 };
 
 /** Rule ids that have a deterministic (no-LLM) patch template. */

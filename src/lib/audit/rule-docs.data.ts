@@ -139,6 +139,29 @@ export const RULE_DOC_DATA = {
       "meta-title-missing"
     ]
   },
+  "meta-og-image-url": {
+    "summary": "The page declares an og:image, but as a relative path or a localhost address. Social networks and chat apps fetch the picture from their own servers, so the shared card comes out without it.",
+    "failing": {
+      "label": "og:image tags no share crawler can load",
+      "lang": "html",
+      "code": "<!-- /pricing: a path with no host -->\n<meta property=\"og:image\" content=\"/images/og-pricing.png\">\n\n<!-- /blog/launch: resolved against the build machine -->\n<meta property=\"og:image\" content=\"http://localhost:3000/blog/launch/opengraph-image.png\">"
+    },
+    "measured": "Septune reads the og:image meta of every page that answers 2xx and checks the value without fetching it. A value with no scheme, such as /og.png or images/og.png, is reported as relative. An http or https URL whose host is localhost, 0.0.0.0, ::1 or a 127.x address is reported, unless the audited site runs on localhost too. Another scheme, such as data:, is reported as well. A protocol-relative value (//cdn.example.com/og.png) passes, and pages with no og:image at all are left to meta-og-image-missing.",
+    "consequence": "A localhost address points at the crawler's own machine, so that image can never load. A relative path works only on platforms that resolve it against the page address, which the Open Graph protocol doesn't ask them to do: every example on ogp.me uses a full URL. The link still shares, with a text-only card or a picture the platform picked by itself.",
+    "fix": "Write the image as an absolute https URL on the production domain, built from one setting that holds the site's origin, so a preview or local build can't leak its own host into production. Then open that URL in a private window to check it answers 200 without a login.",
+    "frameworks": {
+      "nextjs": "Set metadataBase: new URL('https://example.com') in the root layout's metadata. Next.js resolves relative openGraph.images, twitter.images and alternates.canonical against it. Without it, images fall back to the deployment URL on Vercel and to http://localhost:3000 elsewhere, with a warning that names the origin used.",
+      "nuxt": "Pass the full URL to useSeoMeta({ ogImage }) or to app.head in nuxt.config.ts; plain Nuxt writes the value into the tag as given.",
+      "astro": "Build the value with new URL(image, Astro.site) and set site in astro.config.mjs. Without site, Astro.site is undefined and the URL constructor throws on a relative path, which at least fails the build instead of shipping a broken card.",
+      "sveltekit": "Prefix the path with the production origin from a public environment variable. During prerendering, url.origin is http://sveltekit-prerender unless kit.prerender.origin is set, so an origin read from the request ends up in the static HTML."
+    },
+    "verify": "Run curl -s https://example.com/pricing | grep -io '<meta[^>]*og:image[^>]*>' and check the URL starts with https:// on your own domain, load it in a private window, then re-run the audit.",
+    "related": [
+      "meta-og-image-missing",
+      "indexing-canonical-mismatch",
+      "img-broken"
+    ]
+  },
   "content-keyword-alignment": {
     "summary": "The words the page's text is mostly about don't appear in its title or its H1. The search result and the heading then promise something other than what the page covers, or name it in words nobody searches for.",
     "failing": {
@@ -582,7 +605,7 @@ export const RULE_DOC_DATA = {
       "lang": "xml",
       "code": "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n  <url><loc>https://example.com/</loc></url>\n  <url><loc>https://example.com/old-pricing</loc></url> <!-- 301 to /pricing -->\n  <url><loc>https://example.com/cart</loc></url> <!-- noindex -->\n  <url><loc>http://localhost:3000/blog</loc></url> <!-- wrong host -->\n  <url><loc>/about</loc></url> <!-- relative -->\n</urlset>"
     },
-    "measured": "Septune reads the sitemaps named by Sitemap: lines in robots.txt, or /sitemap.xml then /sitemap_index.xml when none is declared, follows sitemap indexes and gzip files, and keeps up to 5,000 URLs from up to 10 files (300 URLs from 2 files on the free web audit). Each listed URL that isn't absolute, or whose origin differs from the one the site's start page landed on, is reported. Each listed URL the crawl fetched is then checked for a status of 400 or above, a redirect, a noindex (meta tag or X-Robots-Tag header) or a canonical pointing to another URL. Entries are matched on scheme, host and path, ignoring a trailing slash and the query string, and entries the crawl didn't reach are not judged. The evidence says how many listed URLs were checked, and names the other host when entries point there.",
+    "measured": "Septune reads the sitemaps named by Sitemap: lines in robots.txt, or /sitemap.xml, /sitemap_index.xml and /sitemap-index.xml in turn when none is declared, follows sitemap indexes and gzip files, and keeps up to 5,000 URLs from up to 10 files (300 URLs from 2 files on the free web audit). Each listed URL that isn't absolute, or whose origin differs from the one the site's start page landed on, is reported. Each listed URL the crawl fetched is then checked for a status of 400 or above, a redirect, a noindex (meta tag or X-Robots-Tag header) or a canonical pointing to another URL. Entries are matched on scheme, host and path, ignoring a trailing slash and the query string, and entries the crawl didn't reach are not judged. The evidence says how many listed URLs were checked, and names the other host when entries point there.",
     "consequence": "Crawlers sent through the sitemap hit redirects, errors and noindex pages, and entries on a wrong host point them away from your site.",
     "fix": "Generate the sitemap from the same source as your routes, filtered to pages that answer 200, are indexable and are their own canonical. Write each <loc> as an absolute URL on your production origin, taken from one setting, and replace moved URLs with their final address. Rebuild it on every deploy so removed pages drop out.",
     "frameworks": {
@@ -627,7 +650,7 @@ export const RULE_DOC_DATA = {
       "lang": "http",
       "code": "GET https://example.com/sitemap.xml\nHTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n<!doctype html><html><head><title>Example</title>"
     },
-    "measured": "Septune fetches the sitemaps named by Sitemap: lines in robots.txt (or /sitemap.xml, then /sitemap_index.xml, when none is declared) and every child file an index lists, stopping once 10 files have been read (2 on the free web audit). A file counts as unreadable when the request fails or times out, the status isn't 2xx, the Content-Type is text/html even if the body is XML, a gzip body can't be inflated, or the content has neither <urlset> nor <sitemapindex> and no <loc> entries. The rule fires only when robots.txt declares a sitemap or at least one sitemap was read; a site with no sitemap at all is reported by framework-sitemap-missing. The evidence names the first 3 files with their reason, and up to 20 files are listed.",
+    "measured": "Septune fetches the sitemaps named by Sitemap: lines in robots.txt (or /sitemap.xml, /sitemap_index.xml and /sitemap-index.xml, in that order, when none is declared) and every child file an index lists, stopping once 10 files have been read (2 on the free web audit). A file counts as unreadable when the request fails or times out, the status isn't 2xx, the Content-Type is text/html even if the body is XML, a gzip body can't be inflated, or the content has neither <urlset> nor <sitemapindex> and no <loc> entries. The rule fires only when robots.txt declares a sitemap or at least one sitemap was read; a site with no sitemap at all is reported by framework-sitemap-missing. The evidence names the first 3 files with their reason, and up to 20 files are listed.",
     "consequence": "Every URL that only this file lists is missing from what your sitemaps tell search engines, and if you submitted the file, Search Console reports it as an error.",
     "fix": "Serve each sitemap with a 200 status and an XML Content-Type such as application/xml, with <urlset> as the root of a URL list and <sitemapindex> as the root of an index. Make robots.txt and the index point at paths that exist. The HTML case usually comes from a single-page app's catch-all route answering /sitemap.xml with index.html.",
     "frameworks": {
@@ -1310,13 +1333,13 @@ export const RULE_DOC_DATA = {
       "lang": "http",
       "code": "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\n\n<!doctype html>\n<html><head><title>Example</title></head>\n<body><div id=\"root\"></div></body></html>"
     },
-    "measured": "When robots.txt has Sitemap: lines, Septune reads only those URLs; otherwise it tries /sitemap.xml, then /sitemap_index.xml. A file counts when it answers 2xx after redirects, isn't served as text/html, and has a <urlset> or <sitemapindex> root or at least one <loc>; gzip files are inflated first. The rule fires when no file passes, and a declared file that fails is also reported under indexing-sitemap-format.",
+    "measured": "When robots.txt has Sitemap: lines, Septune reads only those URLs; otherwise it tries /sitemap.xml, then /sitemap_index.xml, then /sitemap-index.xml. A file counts when it answers 2xx after redirects, isn't served as text/html, and has a <urlset> or <sitemapindex> root or at least one <loc>; gzip files are inflated first. The rule fires when no file passes, and a declared file that fails is also reported under indexing-sitemap-format.",
     "consequence": "New pages and pages deep in the site are found later, through links only. Septune also has no URL list to seed its crawl with, so it can't reach pages nothing links to or compare that list with the crawl.",
     "fix": "Generate the file at build time from your routes or content so it can't drift, list only canonical URLs that answer 200, and serve it as application/xml. Past 50,000 URLs or 50 MB uncompressed, split it into several files under a sitemap index. If it lives at another path, add a Sitemap: line with its full URL to robots.txt.",
     "frameworks": {
       "nextjs": "An app/sitemap.ts whose default export returns MetadataRoute.Sitemap is served at /sitemap.xml with an XML content type.",
       "nuxt": "A server/routes/sitemap.xml.ts handler should set the type explicitly with setHeader(event, 'content-type', 'application/xml'), because a file served as text/html is rejected as an app page.",
-      "astro": "@astrojs/sitemap writes sitemap-index.xml, a name Septune only finds through robots.txt, so add Sitemap: https://example.com/sitemap-index.xml to public/robots.txt.",
+      "astro": "@astrojs/sitemap writes sitemap-index.xml and sitemap-0.xml, never sitemap.xml, and only when site is set in astro.config.mjs. Google learns of the index from a Sitemap: line in public/robots.txt or a submission in Search Console.",
       "sveltekit": "A GET handler in src/routes/sitemap.xml/+server.ts must return a Response with Content-Type application/xml; for a fixed set of pages, a file in static/ works too."
     },
     "verify": "Run curl -sI https://example.com/sitemap.xml and check for a 200 status with an XML Content-Type rather than text/html, then re-run the audit.",
@@ -1356,7 +1379,7 @@ export const RULE_DOC_DATA = {
       "lang": "text",
       "code": "User-agent: *\nDisallow: /cart\nDisallow: /search\n\n# Sitemap: https://example.com/sitemap.xml"
     },
-    "measured": "The rule needs three facts: /robots.txt answers 2xx as a non-HTML file, a sitemap was read at /sitemap.xml or /sitemap_index.xml, and no line of robots.txt starts with Sitemap: (any letter case, spaces allowed). A commented-out line doesn't count. A relative value such as Sitemap: /sitemap.xml is accepted and resolved against the site's origin, so it clears this rule.",
+    "measured": "The rule needs three facts: /robots.txt answers 2xx as a non-HTML file, a sitemap was read at /sitemap.xml, /sitemap_index.xml or /sitemap-index.xml, and no line of robots.txt starts with Sitemap: (any letter case, spaces allowed). A commented-out line doesn't count. A relative value such as Sitemap: /sitemap.xml is accepted and resolved against the site's origin, so it clears this rule.",
     "consequence": "Search engines learn the file's address only if you submitted it in their own tools, such as Search Console or Bing Webmaster Tools; Google and Bing both read the robots.txt line without any account.",
     "fix": "Add a line with the sitemap's full URL, for example Sitemap: https://example.com/sitemap.xml, anywhere in the file. Google requires an absolute URL there, so don't rely on a relative path even though Septune accepts one. The generated patch adds only that line and leaves the rules already in the file as they are.",
     "frameworks": {
@@ -1367,6 +1390,28 @@ export const RULE_DOC_DATA = {
       "framework-sitemap-missing",
       "framework-robots-missing",
       "indexing-robots-format"
+    ]
+  },
+  "framework-js-only-content": {
+    "summary": "The HTML the server sends is an empty app element and a script. The text, headings and links exist only once JavaScript has run in the browser, so a crawler that doesn't run it receives a blank page.",
+    "failing": {
+      "label": "index.html of a Vite + React app, served for every route",
+      "lang": "html",
+      "code": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <title>Acme</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-B7xQ2c.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Dk3f9a.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>"
+    },
+    "measured": "Septune fetches each indexable page as SeptuneBot and reads the HTML without running JavaScript. The page is reported when three things hold: an element with the id root, app, __next, __nuxt or svelte (a div or main), or an <app-root> element, is empty; the page loads at least one script with a src attribute; and the body text, with scripts, styles and noscript left out, is under 50 words. A page whose mount element already holds rendered HTML passes, whatever its id.",
+    "consequence": "Googlebot puts pages like these in a rendering queue and indexes what the scripts produce, later than plain HTML. Crawlers that don't render get nothing: when Vercel measured them in December 2024, none of the main AI crawlers, GPTBot and ClaudeBot among them, executed JavaScript. Until the scripts run, every route also shares the title and description written in index.html.",
+    "fix": "Put the content in the HTML: prerender the public routes at build time, or render them on the server, and keep the client-only app for screens behind a login. Some hosts prerender for a list of verified crawlers only, as Lovable does for its older React + Vite apps; SeptuneBot isn't on such lists, so compare with what Google got in Search Console before changing anything.",
+    "frameworks": {
+      "nextjs": "The App Router has no mount element, so this rule fires on Pages Router sites whose page returns nothing on the server, often a mounted guard or dynamic(() => import(...), { ssr: false }) wrapped around the whole page.",
+      "nuxt": "Nuxt renders on the server unless ssr: false is set in nuxt.config.ts or in a routeRules entry; the empty element is then <div id=\"__nuxt\">. Drop the flag on public routes, or prerender them with routeRules and prerender: true."
+    },
+    "verify": "Run curl -s https://example.com/ | sed -n '/<body/,/<\\/body>/p' and look for the page's text. If the body holds only the empty element and script tags, re-run the audit after the change; Search Console's URL Inspection shows the HTML Google rendered, which can differ from what other crawlers get.",
+    "related": [
+      "structure-thin-content",
+      "meta-title-duplicate",
+      "link-orphan-pages",
+      "structure-h1-missing"
     ]
   }
 } satisfies Record<string, RuleDoc>;

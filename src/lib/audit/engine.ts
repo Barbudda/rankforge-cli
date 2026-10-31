@@ -222,6 +222,48 @@ function isUtilityPath(path: string): boolean {
     .some((seg) => UTILITY_SEGMENTS.has(seg.toLowerCase().replace(/\.(html?|php)$/, "")));
 }
 
+const LOCAL_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|\[::1\])$/i;
+
+/**
+ * Why social networks can't fetch this og:image value, or null when they can.
+ * A protocol-relative URL (//cdn…) is left alone: it resolves on any https page.
+ * A localhost image is fine when the audited site is itself on localhost.
+ */
+export function ogImageUrlProblem(value: string, siteUrl: string): string | null {
+  const v = value.trim();
+  if (v.startsWith("//")) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(v)) return "relative URL";
+  let url: URL;
+  try {
+    url = new URL(v);
+  } catch {
+    return "malformed URL";
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return `${url.protocol.slice(0, -1)} URL`;
+  const siteHost = (() => {
+    try {
+      return new URL(siteUrl).hostname;
+    } catch {
+      return "";
+    }
+  })();
+  if (LOCAL_HOSTS.test(url.hostname) && !LOCAL_HOSTS.test(siteHost)) return "points at localhost";
+  return null;
+}
+
+// The empty element a client-rendered app mounts into: React (root), Vue
+// (app), Nuxt (__nuxt), Next.js (__next), SvelteKit (svelte), Angular.
+const APP_SHELL =
+  /<(div|main)\b[^>]*\bid\s*=\s*["'](root|app|__next|__nuxt|svelte)["'][^>]*>\s*<\/\1>|<app-root\b[^>]*>\s*<\/app-root>/i;
+
+/**
+ * The page's text is written by JavaScript in the browser: its HTML holds an
+ * empty mount element, a script to fill it and almost no text of its own.
+ */
+export function isAppShell(page: Pick<CrawledPage, "html" | "wordCount">): boolean {
+  return page.wordCount < 50 && /<script\b[^>]*\bsrc\s*=/i.test(page.html) && APP_SHELL.test(page.html);
+}
+
 /**
  * Run the full deterministic audit over a crawled site.
  */
@@ -364,6 +406,30 @@ export function runDeterministicAudit(
     evidence: `${noOgImage.length} pages have no og:image.`,
     affectedUrls: noOgImage.map((p) => ({ url: norm(p.url) })),
     files: [{ path: fileHint(fw, "layout"), reason: "OpenGraph metadata is usually set in the layout/head.", confidence: 55 }],
+    canAutoFix: true,
+  });
+
+  // Social networks fetch the image from their own servers, so it needs a full
+  // public URL. Next.js writes a localhost one when metadataBase is unset and
+  // the build runs outside Vercel.
+  const badOgImage = ok.flatMap((p) => {
+    const value = p.og["og:image"];
+    const problem = value ? ogImageUrlProblem(value, startUrl) : null;
+    return problem ? [{ url: norm(p.url), note: `${value} (${problem})` }] : [];
+  });
+  push({
+    ruleId: "meta-og-image-url",
+    category: "metadata",
+    title: "og:image is a relative or localhost URL",
+    description:
+      "Social networks and chat apps fetch og:image from their own servers, so it needs an absolute public URL. A relative path or a localhost address gives a card with no image.",
+    impact: "low",
+    effort: "low",
+    risk: "low",
+    confidence: 95,
+    evidence: `${badOgImage.length} pages have an og:image no social network can fetch.`,
+    affectedUrls: badOgImage,
+    files: [{ path: fileHint(fw, "layout"), reason: fw === "nextjs" ? "Set metadataBase in the root layout's metadata." : "Write the og:image as an absolute URL.", confidence: 60 }],
     canAutoFix: true,
   });
 
@@ -1185,6 +1251,28 @@ export function runDeterministicAudit(
   });
 
   // ══ FRAMEWORK-SPECIFIC ════════════════════════════════════════════
+  // A crawler that doesn't run JavaScript gets these pages empty. Googlebot
+  // renders them later; the AI crawlers Vercel measured in December 2024 never
+  // did. Some hosts (Lovable, for its older apps) prerender for a list of
+  // verified crawlers only and SeptuneBot isn't on it, hence the caveat and
+  // the user agent named in the evidence.
+  const shells = indexable.filter(isAppShell);
+  push({
+    ruleId: "framework-js-only-content",
+    category: "framework",
+    title: "Page content only appears after JavaScript runs",
+    description:
+      "The HTML of these pages is an empty mount element and a script: the text, headings and links are written in the browser. Crawlers that don't run JavaScript, including the main AI crawlers, see an empty page. Prerender or server-render the public pages. If your host prerenders for verified crawlers only, check what Google got in Search Console's URL Inspection first.",
+    impact: "high",
+    effort: "medium",
+    risk: "medium",
+    confidence: 75,
+    evidence: `${shells.length} of ${indexable.length} indexable pages arrive with an empty app element and under 50 words of text (fetched as SeptuneBot, without running JavaScript).`,
+    affectedUrls: shells.map((p) => ({ url: norm(p.url), note: `${p.wordCount} words in the HTML` })),
+    files: [{ path: fileHint(fw, "config"), reason: "Turn on prerendering or server rendering for public routes.", confidence: 50 }],
+    canAutoFix: false,
+  });
+
   // Sitemap & robots are probed directly (real fetches) by the runner, not
   // inferred from HTML — accurate, deterministic.
   if (siteFiles && !siteFiles.hasSitemap) {
@@ -1198,7 +1286,9 @@ export function runDeterministicAudit(
       effort: "low",
       risk: "low",
       confidence: 95,
-      evidence: `GET ${new URL("/sitemap.xml", startUrl).toString()} did not return a sitemap.`,
+      evidence: siteFiles.robotsDeclaresSitemap
+        ? "None of the sitemaps declared in robots.txt could be read."
+        : "robots.txt declares no sitemap, and /sitemap.xml, /sitemap_index.xml and /sitemap-index.xml returned none.",
       affectedUrls: [{ url: norm(startUrl) }],
       files: [{ path: fileHint(fw, "sitemap"), reason: "Add a sitemap route/file for this framework.", confidence: 65 }],
       canAutoFix: true,
@@ -1216,7 +1306,7 @@ export function runDeterministicAudit(
       risk: "low",
       confidence: 95,
       evidence: `GET ${new URL("/robots.txt", startUrl).toString()} did not return a robots file.`,
-      affectedUrls: [{ url: norm(startUrl) }],
+      affectedUrls: [{ url: norm(startUrl), ...(siteFiles.sitemapFiles?.[0] ? { note: siteFiles.sitemapFiles[0] } : {}) }],
       files: [{ path: fileHint(fw, "robots"), reason: "Add a robots route/file for this framework.", confidence: 65 }],
       canAutoFix: true,
     });
@@ -1233,7 +1323,9 @@ export function runDeterministicAudit(
       risk: "low",
       confidence: 90,
       evidence: "robots.txt is missing a Sitemap: line.",
-      affectedUrls: [{ url: norm(startUrl) }],
+      // The note carries the sitemap that was read, so the patch names that
+      // file (Astro's is sitemap-index.xml, not sitemap.xml).
+      affectedUrls: [{ url: norm(startUrl), ...(siteFiles.sitemapFiles?.[0] ? { note: siteFiles.sitemapFiles[0] } : {}) }],
       files: [{ path: fileHint(fw, "robots"), reason: "Add a Sitemap: line to robots.", confidence: 70 }],
       canAutoFix: true,
     });
@@ -1313,7 +1405,8 @@ export function runDeterministicAudit(
 
 // ── helpers ─────────────────────────────────────────────────────────
 function groupBy<T>(arr: T[], key: (x: T) => string): Record<string, T[]> {
-  const out: Record<string, T[]> = {};
+  // No prototype: a page titled "constructor" would otherwise hit Object's.
+  const out: Record<string, T[]> = Object.create(null);
   for (const x of arr) (out[key(x)] ??= []).push(x);
   return out;
 }

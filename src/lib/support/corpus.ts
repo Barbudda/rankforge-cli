@@ -20,6 +20,7 @@ import {
   FRAMEWORK_PAGES,
   PRICING_FAQS,
 } from "@/lib/seo/content";
+import { GUIDES } from "@/lib/seo/guides";
 
 export interface CorpusChunk {
   id: string;
@@ -102,6 +103,16 @@ function buildChunks(): CorpusChunk[] {
           : "This check is reported with the affected pages and the evidence; the fix needs a human decision."
       }`,
       url: `/docs/issues/${rule.id}`,
+    });
+  }
+
+  // ── Framework guides (one problem each) ─────────────────────────
+  for (const g of GUIDES) {
+    chunks.push({
+      id: `guide:${g.framework}:${g.slug}`,
+      title: g.h1,
+      text: `${g.h1}. ${g.answer.replaceAll("`", "")} ${g.description}`,
+      url: `/frameworks/${g.framework}/${g.slug}`,
     });
   }
 

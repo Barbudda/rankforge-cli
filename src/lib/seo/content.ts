@@ -6,6 +6,7 @@
 import type { Framework } from "@/types";
 import { RULE_CATALOG } from "@/lib/audit/catalog";
 import { BILLING_OPEN } from "@/lib/pricing";
+import type { GuideSection } from "./guides";
 
 export type FrameworkPage = {
   slug: Framework;
@@ -17,6 +18,8 @@ export type FrameworkPage = {
   /** First published / last content change (YYYY-MM-DD, from the repository). */
   published: string;
   updated: string;
+  /** Framework-specific sections shown before the generic ones. */
+  sections?: GuideSection[];
 };
 
 /** Framework landing pages — slugs match the footer links. */
@@ -29,7 +32,7 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     metaApi: "generateMetadata / metadata export",
     compare: ["nuxt", "astro"],
     published: "2026-07-06",
-    updated: "2026-10-30",
+    updated: "2026-10-31",
   },
   {
     slug: "nuxt",
@@ -39,7 +42,7 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     metaApi: "useSeoMeta / useHead",
     compare: ["nextjs", "sveltekit"],
     published: "2026-07-06",
-    updated: "2026-10-30",
+    updated: "2026-10-31",
   },
   {
     slug: "astro",
@@ -49,7 +52,7 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     metaApi: "frontmatter + <head> in layouts",
     compare: ["nextjs", "nuxt"],
     published: "2026-07-06",
-    updated: "2026-10-30",
+    updated: "2026-10-31",
   },
   {
     slug: "sveltekit",
@@ -59,7 +62,60 @@ export const FRAMEWORK_PAGES: FrameworkPage[] = [
     metaApi: "<svelte:head> / load data",
     compare: ["nuxt", "nextjs"],
     published: "2026-07-06",
-    updated: "2026-10-30",
+    updated: "2026-10-31",
+  },
+  {
+    slug: "vite-react",
+    name: "Vite + React",
+    blurb:
+      "A Vite + React app sends the same index.html for every route and builds the page in the browser. Septune shows what crawlers get from that HTML, and its patches give each route its own canonical.",
+    metaApi: "index.html, then the <title> and <meta> tags React 19 moves into the head",
+    compare: ["nextjs", "astro"],
+    published: "2026-10-31",
+    updated: "2026-10-31",
+    sections: [
+      {
+        heading: "What crawlers receive from a Vite + React app",
+        blocks: [
+          {
+            kind: "p",
+            text: "A production build turns index.html into the one file the server sends for every route: a `<div id=\"root\">` left empty and a script that fills it in the browser. Whatever React renders afterwards, a crawler that reads the HTML without running JavaScript gets this:",
+          },
+          {
+            kind: "code",
+            label: "GET /pricing, before JavaScript runs",
+            code: '<!doctype html>\n<html lang="en">\n  <head>\n    <title>Acme</title>\n    <script type="module" crossorigin src="/assets/index-B7xQ2c.js"></script>\n  </head>\n  <body>\n    <div id="root"></div>\n  </body>\n</html>',
+          },
+          {
+            kind: "p",
+            text: "Googlebot runs JavaScript: it [queues pages that answer 200 for rendering](https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics), for a few seconds or longer, and indexes the result. The AI crawlers [Vercel and MERJ measured in December 2024](https://vercel.com/blog/the-rise-of-the-ai-crawler) didn't run it at all, OpenAI's and ClaudeBot included, so for them every route is this file with the same title.",
+          },
+        ],
+      },
+      {
+        heading: "Prerender the public routes",
+        blocks: [
+          {
+            kind: "list",
+            items: [
+              "React Router in framework mode: set `prerender` in react-router.config.ts. The value `true` covers static paths only; for `/blog/:slug`, return the paths from a function.",
+              "Vike: `prerender: true` in +config.js writes the .html files to dist/client/ when `vike build` runs.",
+              "Vite alone: its SSR API is a low-level one, meant for framework authors. Its guide shows how to pre-render known routes with the production SSR code, from a script of your own.",
+              "Or split the site: serve the marketing pages as static HTML and keep the React app for the screens behind a login.",
+            ],
+          },
+          {
+            kind: "code",
+            label: "react-router.config.ts",
+            code: 'import type { Config } from "@react-router/dev/config";\n\nexport default {\n  ssr: false,\n  async prerender({ getStaticPaths }) {\n    const posts = ["launch", "pricing-update"];\n    return [...getStaticPaths(), ...posts.map((slug) => `/blog/${slug}`)];\n  },\n} satisfies Config;',
+          },
+          {
+            kind: "p",
+            text: "Septune's check for JavaScript-only content reports every indexable page that still arrives as an empty shell, so you can see which routes the prerender missed.",
+          },
+        ],
+      },
+    ],
   },
 ];
 
@@ -172,6 +228,16 @@ export type ChangelogEntry = { date: string; title: string; notes: string[] };
 
 /** Newest first. Dates also drive sitemap lastModified for content routes. */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    date: "2026-10-31",
+    title: "Two new checks, and guides for the errors developers search",
+    notes: [
+      "New check: og:image values social networks can't fetch, a relative path or a localhost address. On Next.js the patch sets metadataBase in the root layout.",
+      "New check: pages whose content only appears after JavaScript runs, the empty shell a crawler without a browser receives. Hosts that prerender for verified crawlers only, as Lovable does for its older apps, can make it fire on pages Google sees in full, and the check says so.",
+      "Sitemaps written by @astrojs/sitemap (sitemap-index.xml) are found without a robots.txt line, and the Astro sitemap and robots patches use that file.",
+      "A Vite + React guide, and six pages that each answer one problem: the Next.js metadataBase warning, og:image not showing, noindex, canonical URLs, an Astro sitemap that doesn't work, and Lovable SEO in 2026.",
+    ],
+  },
   {
     date: "2026-10-30",
     title: "A documentation page for each of the 67 checks",
