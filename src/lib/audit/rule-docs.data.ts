@@ -1306,14 +1306,14 @@ export const RULE_DOC_DATA = {
     ]
   },
   "perf-viewport-no-width": {
-    "summary": "These pages have a viewport tag whose content sets no width, for example only initial-scale=1 or user-scalable=no. The layout width is then left to each browser to work out from the other values, and with neither width nor initial-scale it falls back to the desktop default.",
+    "summary": "These pages have a viewport tag whose content sets no width, for example only initial-scale=1 or user-scalable=no. Each browser then derives the layout size from the other values, and without initial-scale either, it falls back to the desktop default.",
     "failing": {
       "label": "Viewport tag with a scale but no width",
       "lang": "html",
       "code": "<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"initial-scale=1, maximum-scale=1\">\n  <title>Menu | Example Bakery</title>\n</head>"
     },
     "measured": "On every page that answered 2xx with a viewport tag whose content isn't empty, Septune checks that content for a width= key, case-insensitive. Pages without one are listed, with the content found in the note. Any width value passes, including a fixed one such as width=1024, and when a page has several viewport tags only the first is read.",
-    "consequence": "A page with initial-scale but no width depends on each browser's own rule for deriving the layout width, and one with neither is shown zoomed out at desktop width, as if it had no viewport tag. In both cases, media queries written for phones may not match.",
+    "consequence": "A page with initial-scale but no width depends on each browser's own rule for sizing the layout, and one with neither is shown zoomed out at desktop size, as if it had no viewport tag. In both cases, media queries written for phones may not match.",
     "fix": "Put width=device-width first in the content: <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">. A fixed width such as width=1024 passes this check but still forces a desktop layout on phones, so replace it with device-width too. Remove maximum-scale and user-scalable=no while you're there, so visitors can zoom.",
     "frameworks": {
       "nextjs": "Make the viewport export in app/layout.tsx include width: \"device-width\", as in export const viewport: Viewport = { width: \"device-width\", initialScale: 1 }.",
@@ -1379,9 +1379,9 @@ export const RULE_DOC_DATA = {
       "lang": "text",
       "code": "User-agent: *\nDisallow: /cart\nDisallow: /search\n\n# Sitemap: https://example.com/sitemap.xml"
     },
-    "measured": "The rule needs three facts: /robots.txt answers 2xx as a non-HTML file, a sitemap was read at /sitemap.xml, /sitemap_index.xml or /sitemap-index.xml, and no line of robots.txt starts with Sitemap: (any letter case, spaces allowed). A commented-out line doesn't count. A relative value such as Sitemap: /sitemap.xml is accepted and resolved against the site's origin, so it clears this rule.",
+    "measured": "The rule needs three facts: /robots.txt answers 2xx as a non-HTML file, a file was read at one of the three usual paths (/sitemap.xml first), and no line of robots.txt starts with Sitemap: (any letter case, spaces allowed). A commented-out line doesn't count. A relative value such as /sitemap.xml is accepted and resolved against the site's origin, so it clears this rule.",
     "consequence": "Search engines learn the file's address only if you submitted it in their own tools, such as Search Console or Bing Webmaster Tools; Google and Bing both read the robots.txt line without any account.",
-    "fix": "Add a line with the sitemap's full URL, for example Sitemap: https://example.com/sitemap.xml, anywhere in the file. Google requires an absolute URL there, so don't rely on a relative path even though Septune accepts one. The generated patch adds only that line and leaves the rules already in the file as they are.",
+    "fix": "Add a line with the file's full URL, for example Sitemap: https://example.com/sitemap.xml, anywhere in robots.txt. Google requires an absolute URL there, so don't rely on a relative path even though Septune accepts one. The generated patch adds only that line and leaves the rules already in the file as they are.",
     "frameworks": {
       "nextjs": "Add a sitemap field, a string or an array of absolute URLs, to the object that app/robots.ts returns."
     },

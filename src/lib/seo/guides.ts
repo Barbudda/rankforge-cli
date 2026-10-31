@@ -390,7 +390,7 @@ export const GUIDES: Guide[] = [
         blocks: [
           {
             kind: "p",
-            text: "The integration writes `sitemap-index.xml`, which links to numbered files: `sitemap-0.xml`, then `sitemap-1.xml` for larger sites. Requesting `/sitemap.xml` returns a 404 or your host's fallback page. Some audit tools only look for that name. Septune also tries `/sitemap-index.xml` when robots.txt names no sitemap.",
+            text: "The integration writes an index, which links to numbered files: `sitemap-0.xml`, then `sitemap-1.xml` for larger sites. Requesting `/sitemap.xml` returns a 404 or your host's fallback page. Some audit tools only look for that name. Septune also tries `/sitemap-index.xml` when robots.txt names none.",
           },
         ],
       },
@@ -404,7 +404,7 @@ export const GUIDES: Guide[] = [
           },
           {
             kind: "p",
-            text: "The Astro docs are direct about it: the integration needs to know the deployed URL, and `site` must begin with `http://` or `https://`. After a build, check that `dist/` contains `sitemap-index.xml`.",
+            text: "The Astro docs are direct about it: the integration needs to know the deployed URL, and `site` must begin with `http://` or `https://`. After a build, check that `dist/` contains the index file.",
           },
         ],
       },
